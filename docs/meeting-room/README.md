@@ -15,6 +15,7 @@
 - 角色 Agent 与能力 Agent 分开：角色负责"谁来决定/交付"，能力负责"怎么查/怎么操作"。
 - 主助手负责拆解、调度、汇总；会议是它调度的一种协作任务，会议内部治理（独立首轮、争议、终审）不可被主助手跳过。
 - 参考产品：Marvis（主 Agent + 预置能力 Agent + 过程透明 + L2 硬审批）、DSH（superagent/会话/工具/MCP/技能）、OpenCode/OpenHands/Magpie（工具与技能生态）。
+- DSH 已有可直接复用的能力（2026-11-15 核对）：**智能体团队协作**（子代理树 + 共享任务板，`packages/client/ui-agent-team`）、Agent presets（内置/自定义，创造模式）、审批 UI（`ui-approval`）、Conversation 渲染扩展点。会议产品在其上实现"治理 + 会议列表/详情 + 任务验收"，不重写子代理与工具执行。
 
 ## 当前状态
 
