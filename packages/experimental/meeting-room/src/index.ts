@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import { MeetingStore } from './store.ts'
 
 /** Deployment-tunable meeting defaults. */
 export const Config = z.object({
@@ -15,6 +16,8 @@ export const Config = z.object({
   provider: z.string().min(1).default('spawn'),
   /** Route for the meeting root Session and its role children. */
   agentOptions: z.object({ provider: z.string().min(1), model: z.string().min(1) }).optional(),
+  /** SQLite file holding meeting state; `:memory:` keeps it in-process. */
+  databasePath: z.string().min(1).optional(),
 }).prefault({})
 /** Validated meeting defaults after schema defaults. */
 export type Config = z.infer<typeof Config>
@@ -88,8 +91,12 @@ export default class MeetingRoom extends Service {
   static Config = Config
 
   /** @param ctx - Owning plugin context. @param config - Validated meeting defaults. */
+  private readonly store: MeetingStore
+
   constructor(ctx: Context, private readonly config: Config = Config.parse({})) {
     super(ctx, 'meetingRoom')
+    this.store = new MeetingStore(this.config.databasePath ?? ':memory:')
+    ctx.effect(() => () => { this.store.close() })
     this.ctx.tools.register(defineTool({
       name: 'meeting_start',
       description: 'Run one meeting round. Each role answers independently in its own child session and never sees another role prompt or draft.',
@@ -132,6 +139,7 @@ export default class MeetingRoom extends Service {
    */
   async startMeeting(request: MeetingStartRequest, signal: AbortSignal = new AbortController().signal): Promise<MeetingStartResult> {
     const sessionId = brandString<SessionId>(`meeting-${randomUUID()}`)
+    this.store.recordMeeting(sessionId, request.requirement)
     const meeting = await this.ctx.agents.create({
       sessionId,
       ...(this.config.agentOptions === undefined ? {} : { agentOptions: this.config.agentOptions }),
@@ -150,6 +158,12 @@ export default class MeetingRoom extends Service {
         try {
           const result = await activation.result
           rounds.push({ role: role.name, sessionId: activation.childId, output: textOf(result.output) })
+          this.store.recordRound(sessionId, {
+            index: rounds.length - 1,
+            role: role.name,
+            childSessionId: activation.childId,
+            stopReason: result.stopReason,
+          })
         } finally {
           await activation.dispose()
         }
