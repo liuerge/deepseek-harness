@@ -50,6 +50,7 @@ describe('meeting room', () => {
     })
 
     expect(meeting.rounds.map(round => round.role)).toEqual(['产品经理', '架构师'])
+    expect(ctx.tools.get('meeting_start')?.name).toBe('meeting_start')
     expect(meeting.rounds[0]?.output).toContain('产品初稿')
     expect(meeting.rounds[1]?.output).toContain('架构初稿')
 

@@ -9,8 +9,8 @@
   en: cd5b534fc4b99120
   zh: dd1c6426d283c793
 /deepseek-ai-dsh-meeting-room/summary:
-  en: 01b74a6668e78044
-  zh: 0e9cd8b01406ecfb
+  en: 53d9880bfa54fdbf
+  zh: cd1d51e5bce5113c
 /deepseek-ai-dsh-meeting-room/table-of-contents:
   en: b563e4ec4727d0de
   zh: e2e16626bf3f022f
@@ -29,6 +29,18 @@
 /deepseek-ai-dsh-meeting-room/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
+/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool:
+  en: c6fdb1762262cf78
+  zh: ce2215bb886975c2
+/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool/what-the-model-sees:
+  en: 237250d325f3acac
+  zh: 5257ae89fce53d08
+/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool/token-effect:
+  en: e6025c3942fb0ca0
+  zh: e739708d61007333
+/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool/kv-cache-effect:
+  en: be60cec84945e6f7
+  zh: c63a586114d63888
 /deepseek-ai-dsh-meeting-room/model-experience/role-prompt:
   en: 9c4685359dbdd294
   zh: 46e07312da2a5b08

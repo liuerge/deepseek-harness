@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-subagent'
@@ -76,13 +77,51 @@ function rolePrompt(request: MeetingStartRequest, role: MeetingRole): string {
  * starts empty and receives only {@link rolePrompt}. Isolation therefore holds
  * by construction: no sibling draft reaches another role's first request.
  */
+/** Model-supplied meeting request; validated at the tool boundary. */
+const meetingRequest = z.object({
+  requirement: z.string().min(1),
+  roles: z.array(z.object({ name: z.string().min(1), brief: z.string().min(1) })).min(1),
+})
+
 export default class MeetingRoom extends Service {
-  static inject = ['agents', 'subagents']
+  static inject = ['agents', 'subagents', 'tools']
   static Config = Config
 
   /** @param ctx - Owning plugin context. @param config - Validated meeting defaults. */
   constructor(ctx: Context, private readonly config: Config = Config.parse({})) {
     super(ctx, 'meetingRoom')
+    this.ctx.tools.register(defineTool({
+      name: 'meeting_start',
+      description: 'Run one meeting round. Each role answers independently in its own child session and never sees another role prompt or draft.',
+      parameters: {
+        requirement: { type: 'string', required: true, description: 'Shared goal every role receives.' },
+        roles: {
+          type: 'array',
+          required: true,
+          description: 'Roles answering the independent first round.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              name: { type: 'string', required: true, description: 'Role display name.' },
+              brief: { type: 'string', required: true, description: 'Role brief delivered as the child only task text.' },
+            },
+          },
+        },
+      },
+      output: {
+        schema: { type: 'string' as const },
+        render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }],
+      },
+      execute: async (args, exec) => {
+        const result = await this.startMeeting(meetingRequest.parse(args), exec.signal)
+        return result.rounds.map(round => `${round.role}:\n${round.output}`).join('\n\n')
+      },
+    }))
+    this.ctx.on('tools/pre-execute', async (exec, next) => {
+      if (exec.name !== 'meeting_start') return next()
+      return { kind: 'ask' as const, reason: 'Starting a meeting spawns one subagent per role and spends model calls.' }
+    })
   }
 
   /**

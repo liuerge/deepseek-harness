@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-meeting-room` turns a goal and a list of roles into one meeting: a dedicated root Session owns the meeting, and each role answers its first round in that Session's own subagent. A role's first request contains the goal and its own brief only, so no role sees another role's draft. The service returns each round's child Session id and final text; the meeting Session stores one `subagent/catalog` entry per role.
+`dsh-meeting-room` turns a goal and a list of roles into one meeting: a dedicated root Session owns the meeting, and each role answers its first round in that Session's own subagent. A role's first request contains the goal and its own brief only, so no role sees another role's draft. The service returns each round's child Session id and final text; the meeting Session stores one `subagent/catalog` entry per role. It also registers the `meeting_start` tool and asks for approval before that tool runs.
 
 ## Table of Contents
 
@@ -71,6 +71,20 @@ The service disposes the meeting handle before returning, so the spike-level con
 - [Session](../../core/session/README.md) — session headers, events, and persistence.
 
 ## Model Experience
+
+### meeting_start tool
+
+#### What the model sees
+
+`meeting_start` takes the shared goal and the roles, so the model can start a meeting without a client page. The tool result lists each role and its answer. A `tools/pre-execute` listener asks the user first, so no role child starts until the call is approved.
+
+#### Token effect
+
+The declaration adds a small schema to every request that sees the tool; the result costs one block per role.
+
+#### KV Cache effect
+
+The declaration is stable, so it does not change the prefix per call. Approval adds a user interaction, not model context.
 
 ### Role prompt
 
