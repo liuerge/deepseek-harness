@@ -1,0 +1,8 @@
+# The meeting room bundle composes the Host meeting service with the meeting
+# pages, so one profile row brings in both halves of the product.
+
+- insert:
+    - id: meeting-room
+      name: '@deepseek-ai/dsh-meeting-room'
+    - id: ui-meeting-room
+      name: '@deepseek-ai/dsh-client-ui-meeting-room'

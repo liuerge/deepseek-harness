@@ -65,6 +65,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/liveshare': { kind: 'indirect', reason: 'The host drives viewer prompts into the shared Session, so model requests follow the viewer input the host forwards.' },
   'packages/experimental/plugin-market-bundle': { kind: 'indirect', reason: 'Mounts the pluginMarket service, which lets the Creator preset register the plugin_market tool documented in packages/boot/plugin-market.' },
   'packages/experimental/client-ui-action-cards': { kind: 'indirect', reason: 'Card actions go to the Host card service, which owns the logged tool, decisions and status notice.' },
+  'packages/experimental/client-ui-meeting-room': { kind: 'none', reason: 'The meeting pages render records their registrant injects and add no model-facing input.' },
+  'packages/experimental/meeting-room-bundle': { kind: 'none', reason: 'The bundle composes the meeting service and the meeting pages and adds no model-facing input.' },
   'packages/experimental/client-ui-creation-recommendations': { kind: 'indirect', reason: 'The page card body starts a Creator through the Host page kind; the Host owns its logged task.' },
   'packages/experimental/client-ui-plugin-recommendations': { kind: 'indirect', reason: 'The plugin card body enables through the Host plugin kind; the Host card service owns the logged tool, decisions and status notice.' },
   'packages/experimental/personalized-recommendations': { kind: 'indirect', reason: 'The bundle composes the card service and both card kinds; their packages own the skills, the logged tool and the status notice.' },

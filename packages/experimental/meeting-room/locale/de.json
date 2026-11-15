@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Meetingraum",
+    "description": "Host-Plugin für Meetings: eine Wurzelsitzung pro Meeting und ein Spawn-Subagent pro Rollenrunde."
+  }
+}

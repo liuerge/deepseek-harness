@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Salle de réunion",
+    "description": "Plugin hôte pour les réunions : une session racine par réunion et un sous-agent spawn par tour de rôle."
+  }
+}

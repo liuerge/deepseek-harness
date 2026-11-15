@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Meeting room",
+    "description": "Host plugin for meetings: one root session per meeting and one spawn subagent per role round."
+  }
+}

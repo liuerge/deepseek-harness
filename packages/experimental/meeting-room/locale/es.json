@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sala de reuniones",
+    "description": "Complemento de host para reuniones: una sesión raíz por reunión y un subagente spawn por ronda de rol."
+  }
+}
