@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/meeting-room/README.md
+/:
+  en: 80526a7b0ca7a414
+  zh: d8a216cc43d46798
+/deepseek-ai-dsh-meeting-room:
+  en: cd5b534fc4b99120
+  zh: dd1c6426d283c793
+/deepseek-ai-dsh-meeting-room/summary:
+  en: 01b74a6668e78044
+  zh: 0e9cd8b01406ecfb
+/deepseek-ai-dsh-meeting-room/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: e2e16626bf3f022f
+/deepseek-ai-dsh-meeting-room/use-this-package:
+  en: 956ce975c5272c3d
+  zh: 18bc6e2f73e12740
+/deepseek-ai-dsh-meeting-room/use-this-package/configuration:
+  en: 01e233e231d42576
+  zh: 6cb6ffb49da669a0
+/deepseek-ai-dsh-meeting-room/understand-the-implementation:
+  en: d98735fca2682783
+  zh: cbfbd56086d57d3b
+/deepseek-ai-dsh-meeting-room/further-exploration:
+  en: c71854e51cadad29
+  zh: ea275b7f0323383a
+/deepseek-ai-dsh-meeting-room/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-meeting-room/model-experience/role-prompt:
+  en: 9c4685359dbdd294
+  zh: 46e07312da2a5b08
+/deepseek-ai-dsh-meeting-room/model-experience/role-prompt/what-the-model-sees:
+  en: dff7e1883aa88234
+  zh: 59edff67be5b6917
+/deepseek-ai-dsh-meeting-room/model-experience/role-prompt/token-effect:
+  en: 3fbd0d8702126505
+  zh: 8fa7a2fb634bdac2
+/deepseek-ai-dsh-meeting-room/model-experience/role-prompt/kv-cache-effect:
+  en: e0b802a8d349dbd8
+  zh: 7a6be8d78b8b7d81
+/deepseek-ai-dsh-meeting-room/known-limitations-and-deferred-work:
+  en: 7e6e1c68e80ca8d3
+  zh: 20721ee494978446
