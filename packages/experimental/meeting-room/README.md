@@ -1,5 +1,5 @@
 ---
-description: "Meeting orchestration over DSH sessions: one root Session per meeting and one spawn subagent per role round, with isolated first rounds."
+description: "Main-conversation meetings with isolated participant Sessions and retained conclusions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-meeting-room` turns a goal and a list of roles into one meeting: a dedicated root Session owns the meeting, and each role answers its first round in that Session's own subagent. A role's first request contains the goal and its own brief only, so no role sees another role's draft. The service returns each round's child Session id and final text; the meeting Session stores one `subagent/catalog` entry per role. It also registers the `meeting_start` tool and asks for approval before that tool runs.
+Run independent meeting participants from a main conversation and inspect their existing subagent Sessions. Retain participant opinions separately from versioned main-assistant conclusions; conclusions do not confirm plans or schedule tasks. Save reusable teams and sourced project plans, then execute confirmed versions with per-node acceptance and checkpoint-based continuation. The authenticated project dashboard reads actual records; progress queries currently require manual refresh.
 
 ## Table of Contents
 
@@ -18,6 +18,7 @@ English | [中文](README.zh.md)
 - [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
 
 -----
 
@@ -36,9 +37,9 @@ Mount the plugin with a subagent provider and the route the meeting Session and 
       model: deepseek-chat
 ```
 
-Call `ctx.meetingRoom.startMeeting(request, signal?)` from your own orchestration or tool. The request carries the shared `requirement` and the roles to run; each role supplies a `name` and a `brief`.
+Call `ctx.meetingRoom.startMeeting(request, signal?, caller?)` from your own orchestration or tool. The request carries the shared `requirement` and the roles to run; each role supplies a `name` and a `brief`.
 
-- The returned `sessionId` names the meeting root Session; read the meeting from the session log.
+- The returned meetingId identifies the process; sessionId identifies the initiating main conversation or owned standalone root whose catalog contains its participants.
 - Each returned round carries the role name, the child Session id, and the final assistant text.
 - `signal` cancels child startup and remaining work; completed rounds stay in their logs.
 
@@ -47,18 +48,47 @@ Call `ctx.meetingRoom.startMeeting(request, signal?)` from your own orchestratio
 | Field | Default | Meaning |
 |---|---|---|
 | `provider` | `spawn` | Registered subagent provider used for every role round. |
-| `agentOptions` | unset | Provider and model for the meeting Session and its children; unset follows the composition's route. |
+| `agentOptions` | unset | Model route for standalone meetings and unassigned project workers. Tool-driven meeting participants inherit their main agent route. |
+| `acceptanceMaxBytes` | `4194304` | Maximum bytes per UTF-8 acceptance artifact. |
+
+### Versioned project plans
+
+Use `project_plan_save` to create or edit a draft containing a goal, team, ordered employee assignments, acceptance criteria and sourced background. Creation uses revision zero; edits specify the current id and revision. Each content revision captures team membership and employee settings and remains queryable through `project_plan_list`. Editing retains earlier generations and requires confirmation of the new revision.
+
+The workspace exposes user confirmation through its Remote action. The model tools save and read drafts. Run a confirmed latest revision with `project_execute({ planId, planRevision })`, omitting inline goal, tasks and team. The workers receive the saved source content, reference identifiers and captured employee settings in their logged prompts. Later roster edits affect later drafts. Each confirmed revision admits one execution. Repeated starts and stale or unconfirmed versions fail before child startup. An interrupted execution requires inspection and a new reviewed revision before retrying; automatic resume remains pending.
+
+Inline execution with a goal and tasks remains available for existing callers. Plan confirmation checks apply to executions that select a saved plan. New runs capture the executing caller's working directory; continuation keeps that directory. Task dependency scheduling remains pending. The workspace shows the latest plan generation; the plan tool returns retained generations. Host queries currently read all retained plan records.
+
+Tasks may include `review` with independent team reviewers, criteria, methods, pass conditions, evidence, explicit `artifactPaths`, downstream inputs and `automatic` or `human` release. UTF-8 artifacts must be bounded regular files inside the captured execution directory; `acceptanceMaxBytes` defaults to 4 MiB per file. Each reviewer must use the `read` tool on every artifact and submit each criterion once through structured output. Missing evidence becomes unverifiable. Host-observed decoded-text SHA-256 values and canonical paths bind reports to files; version checks run after review, before human release and before downstream work. Automatic gates continue after all reviewers pass. Human gates wait for workspace release, then `project_execute({ projectId, expectedCheckpoint })` continues from the next task in the original directory. The checkpoint is claimed once. Changed plans or files reject release or continuation. Legacy nodes without explicit paths retain `awaiting-acceptance`; plans without `review` retain final manual review.
+
+Failed acceptance retains its report and blocks downstream work. A confirmed `review.rework.maxAttempts` authorizes a positive bounded number of repair executions for that task; omission disables repair. The original main conversation calls `project_execute({ projectId, expectedCheckpoint })` on the exact latest `acceptance-blocked` checkpoint. An atomic `reworking` claim links the attempt to its failed checkpoint before tools start. The assigned employee receives the failed report and unchanged requirements, uses the original directory and undergoes fresh independent review. Earlier reports remain readable, and human gates still require workspace release. Failed or interrupted attempts consume the limit; other failed or interrupted execution states cannot resume this way and require inspection. New plan revisions invalidate old repair claims. The workspace prepares repair drafts and displays the confirmed limit and consumed attempts; it does not automatically send drafts.
+
+### Reusable employees and teams
+
+`employee_list` returns the Host's saved employees and team templates. `employee_save` saves a name, responsibilities, explicit provider/model and optional registered DSH `preset`. `team_save` saves a team of distinct existing employee ids. Creation omits the id and uses `expectedRevision: 0`; updates use the current id and revision. A stale save fails with `PROJECT_ROSTER_STALE`. The file database preserves these records across restart and upgrades the existing project database to schema version 4 while retaining history.
+
+Pass `employeeId` on a project task to use that employee's model, instructions and optional preset. An omitted preset uses the caller composition. Pass `teamId` to require every task's employee to belong to that saved team. Admission resolves all task references before execution and checkpoints the employee and team revisions. Later roster edits affect later runs. Existing tasks without employee ids keep their previous behavior.
+
+The roster tools and the dashboard catalog operate across this Host. Model routes and presets must be available in the running composition; the subagent runtime reports unavailable configurations when it starts work. Employee configuration is not a tool permission policy. Presets and the existing tool approval system own effective capabilities. Deletion, employee activity projections and per-skill editing remain pending.
+
+### Project execution
+
+`project_execute` takes a goal and ordered tasks containing `role`, `instruction` and `acceptance`. Workers use the caller's working directory and tool composition through the configured subagent provider. Every task receives the previous worker's handoff and the shared goal. Execution returns `awaiting-review`; the caller checks artifacts before accepting delivery. A non-completed child result stops subsequent tasks with a typed error.
+
+`project_records` reads recent checkpoints for the calling Session, newest first, with an explicit positive `limit`. Configure `databasePath` to a file for persistence across restarts. The index stores the plan, task status, child Session references, handoffs and the selected employee/team revisions. Child Session logs retain tool calls and prompts. A running checkpoint after process interruption requires inspection before retrying. Continuation and repair retain the original execution identity.
+
+Tasks execute sequentially within a call. Separate calls share their caller's workspace and require coordination. Cancellation stops remaining tasks and disposes the current child; file and external tool effects may already exist. Automatic restart, project-wide pause and full knowledge retrieval are pending. Queries are count-bounded; handoff size follows worker output limits.
 
 ## Understand the implementation
 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`startMeeting` creates the meeting Session through `ctx.agents.create`, then runs each role through `ctx.subagents.startActivation` with `delivery: 'caller'` and awaits its result before starting the next role. Each child starts empty because the `spawn` provider declares `inheritsParentContext: false`; the prompt is the only user message it receives.
+startMeeting(request, signal, caller) uses the supplied main agent as the participants’ parent. Without caller it owns a new root. Role children use delivery caller and isolated goal/role prompts. Partial or non-completed outputs stop remaining roles. Cancellation and plugin unload dispose active participants and join execution before storage closes.
 
 Isolation is a property of prompt construction, not of filtering existing context: `rolePrompt` emits the shared goal, the role name, and that role's brief. A future discussion round that must read earlier drafts would have to build that text explicitly, which keeps the first round independent by construction.
 
-The service disposes the meeting handle before returning, so the spike-level contract leaves no live agent behind; the Session log remains stored. The meeting Session id is `meeting-<uuid>`; role children are catalogued on the meeting Session with their provider label.
+SQLite schema version 4 retains meeting associations, participant outputs and immutable conclusion revisions. Existing meetings and rounds remain stored; unlinked historical rows are not assigned to a conversation. A failed final checkpoint reports unknown saved state and requires inspection before retrying.
 
 </details>
 
@@ -76,7 +106,7 @@ The service disposes the meeting handle before returning, so the spike-level con
 
 #### What the model sees
 
-`meeting_start` takes the shared goal and the roles, so the model can start a meeting without a client page. The tool result lists each role and its answer. A `tools/pre-execute` listener asks the user first, so no role child starts until the call is approved.
+The model supplies a goal and role briefs to meeting_start and receives JSON with process and conversation identities plus participant outputs. meeting_records returns retained conclusion revisions. meeting_record_decision appends the initiating main assistant conclusion without confirming a plan. Starting participants requires the configured approval capability; absent answerers fail closed.
 
 #### Token effect
 
@@ -94,15 +124,33 @@ Each role receives one user message: `会议目标：<requirement>`, its own rol
 
 #### Token effect
 
-One request per role, sized by the goal and that role's brief; the package adds no tool declarations and no system-prompt section.
+One request per role, sized by the goal and that role's brief; the role prompt adds no tool declarations or system-prompt section.
 
 #### KV Cache effect
 
 Each child Session starts empty, so roles share no cacheable prefix and every first round pays full prompt cost. A discussion round that must read earlier drafts would extend this text and change that accounting.
 
+### Project tools
+
+#### What the model sees
+
+Execution exposes the goal, ordered instructions and acceptance criteria, returning a project id, review state and final handoff. Record queries return caller-owned checkpoints. Roster queries return Host-wide employee and team records. Employee responsibilities and the selected revision enter the worker prompt. Saved-plan execution also includes its exact background content and source references. Worker prompts contain the goal, task and previous handoff. Reviewers also receive the confirmed criteria, author handoff and observed artifact versions, with a child-scoped structured-output tool. Continued workers receive released reports in their logged prompts.
+
+#### Token effect
+
+The two project schemas, three roster schemas and two plan schemas add fixed context. Worker requests include task and handoff text; queries add requested checkpoints. Each independent reviewer adds one child conversation and its structured-result schema; released reports add downstream context.
+
+#### KV Cache effect
+
+Tool results append to caller history. Each worker starts a fresh child Session. Repair workers also receive the failed report and attempt reference in their logged input.
+
 ## Known Limitations and Deferred Work
 
 - Only independent first rounds exist; discussion rounds, objections, verdicts, and publishing are not implemented.
 - Rounds run serially; parallel rounds need explicit working-directory and ownership decisions.
-- The service disposes the meeting Session when it returns, so callers cannot continue a meeting from the returned handle.
-- No client page: meetings are not yet visible outside the session log.
+- Further discussion rounds and automatic scheduling from meeting conclusions are not implemented.
+- The conversation menu reads actual linked meetings; historical rows without a known initiating conversation remain index-only.
+
+### Dev Note
+
+MeetingStartRequest and MeetingStartResult describe the direct orchestration API in [the service source](src/index.ts). The store owns plan and meeting business records; Session logs retain complete conversations and tool traces.

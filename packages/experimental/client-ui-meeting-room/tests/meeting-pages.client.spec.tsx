@@ -21,8 +21,9 @@ function bench(options: {
   details?: Readonly<Record<string, MeetingDetail>>
 } = {}) {
   const instance = createMeetingStore().create()
+  const subscribe = (listener: () => void) => instance.subscribe(listener)
   const useStore = <S,>(selector: (state: MeetingViewState) => S): S =>
-    useSyncExternalStore(instance.subscribe, () => selector(instance.getSnapshot()))
+    useSyncExternalStore(subscribe, () => selector(instance.getSnapshot()))
   const props = {
     useStore,
     actions: instance.actions,

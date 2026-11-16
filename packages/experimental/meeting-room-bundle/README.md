@@ -1,6 +1,6 @@
 ---
 description: "Mount the meeting service and the meeting pages in one profile bundle."
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-meeting-room-bundle
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This bundle composes the meeting room product for a profile: the Host meeting service with its `meeting_start` tool and SQLite index, and the meeting pages that list meetings and show one meeting's detail. A profile that lists this bundle mounts both halves, so the sidebar entry and the tool arrive together. The bundle holds no runtime code of its own; its rows live in the patch file. This bundle adds no model-facing input.
+Add meeting and project workflows to a Web profile with their Host service and Client interface together. Start participants from the main conversation, inspect their existing subagent records, and retain opinions separately from assistant conclusions. The project workspace shows actual plans, progress and acceptance. Configure model routes and persistence in the profile patch; this bundle adds no model input itself.
 
 ## Table of Contents
 
@@ -18,13 +18,14 @@ This bundle composes the meeting room product for a profile: the Host meeting se
 - [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
 ## Use this package
 
-List `@deepseek-ai/dsh-meeting-room-bundle` in the profile's `dsh.profile.bundles` array. The profile composer applies the bundle's patch over the empty profile root, which inserts two rows: the Host meeting service and the meeting pages. The pages then register the sidebar entry and the main panel; the service registers the `meeting_start` tool, so a model can start a meeting and the pages can list what it stored.
+Append `@deepseek-ai/dsh-meeting-room-bundle` to the existing Web profile’s `dsh.profile.bundles` array after its base and Web bundles. It adds the Host meeting service and Client interface. The Client supplies the project workspace and main-conversation meeting menu; the Host supplies tools and retained process records. The base composition provides the required agent, filesystem, Session and subagent services.
 
 The bundle does not configure the service. The service's own configuration (`provider`, `agentOptions` and `databasePath`) belongs to the profile's patch layer, where a later layer replaces the row's configuration.
 
@@ -51,7 +52,7 @@ The bundle's substance is its patch file, declared by the `dsh.bundle.patch` man
 ## Further Exploration
 
 - [Meeting room host plugin](../meeting-room/README.md) — the meeting service, the `meeting_start` tool and the SQLite index.
-- [Meeting pages](../client-ui-meeting-room/README.md) — the meeting list, the meeting detail page and the sidebar entry.
+- [Meeting pages](../client-ui-meeting-room/README.md) — the project workspace and session-specific meeting menu.
 
 -----
 
@@ -70,3 +71,7 @@ No direct effect; the meeting service and the `meeting_start` tool own any later
 
 - **No configuration of its own** — the service's provider, model route and database path stay in the profile's patch layer.
 - **Two rows, one product** — the bundle mounts both halves; a profile that wants only the pages lists the client package itself.
+
+### Dev Note
+
+The patch owns composition only; the Host and Client package READMEs own process behavior and navigation.

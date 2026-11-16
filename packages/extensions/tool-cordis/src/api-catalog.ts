@@ -2331,6 +2331,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'meetingRoom',
+    summary: 'Owns meeting rounds, project execution tools and their checkpoint database.',
+    description: 'Owns meeting rounds, project execution tools and their checkpoint database.',
+    methods: [
+      {
+        signature: 'async startMeeting(request: MeetingStartRequest, signal: AbortSignal = new AbortController().signal, caller?: Agent): Promise<MeetingStartResult>',
+        description: 'Run participant children under the initiating main conversation, or an owned standalone root.',
+        parameters: [{ name: 'request', description: 'Meeting goal and roles.' }, { name: 'signal', description: 'Cancels child startup and remaining work.' }, { name: 'caller', description: 'Initiating main agent; omission creates and disposes a standalone root.' }],
+        returns: 'The meeting Session id and each role\'s output.',
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Session-log service; cold operations never construct a Session or Agent.',
     description: 'Session-log service; cold operations never construct a Session or Agent.',
@@ -7829,6 +7842,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'McpServerRegistration',
     declaration: 'export type McpServerRegistration = Omit<EntryInput, \'enabled\'>;',
+  },
+  {
+    name: 'MeetingId',
+    declaration: 'export type MeetingId = Branded<\'MeetingId\'>;',
+  },
+  {
+    name: 'MeetingStartRequest',
+    declaration: 'export interface MeetingStartRequest {\n    readonly requirement: string;\n    readonly roles: readonly MeetingRole[];\n}',
+  },
+  {
+    name: 'MeetingStartResult',
+    declaration: 'export interface MeetingStartResult {\n    readonly meetingId: MeetingId;\n    readonly sessionId: SessionId;\n    readonly rounds: readonly MeetingRound[];\n}',
   },
   {
     name: 'Mergeability',

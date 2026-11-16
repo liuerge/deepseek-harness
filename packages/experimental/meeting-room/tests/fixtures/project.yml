@@ -1,0 +1,8 @@
+- id: meeting-product
+  name: cordis:meeting-product
+  config:
+    provider: meeting-test-spawn
+    databasePath: DATABASE_PATH
+    agentOptions:
+      provider: mock
+      model: mock

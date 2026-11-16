@@ -2209,6 +2209,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'conversation.session.header.actions\' (client-ui-subagent), so it exists while that entry is mounted',
     occupants: [
       'client-ui-agent-team TeamBoard id \'agent-team\'',
+      'client-ui-meeting-room SessionProjects id \'project-tasks\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.header.actions.subagent.footer\', () => ctx.slots.register(\n      { name: \'conversation.session.header.actions.subagent.footer\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -3057,7 +3058,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-conversation ConversationPanel key \'conversation\'',
       'client-ui-plugin-manager PluginManagerPage',
       'client-ui-schedule TaskManagerPage',
-      'client-ui-meeting-room MeetingRoomPanel',
+      'client-ui-meeting-room ProjectPage',
+      'client-ui-meeting-room SessionMeetings',
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main\', () => ctx.slots.register(\n      { name: \'main\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',

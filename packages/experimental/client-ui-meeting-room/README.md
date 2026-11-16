@@ -1,5 +1,5 @@
 ---
-description: "Meeting list and meeting detail pages for the Web client."
+description: "Main-conversation meeting records, project progress and acceptance controls for the Web client."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package adds the meeting pages to the Web client: a sidebar entry opens the meeting list, and a row opens one meeting's detail page. Both pages show sample meetings that ship with the package, so the layout, the stage bar and the governance rules are visible before real meetings exist. The list filters by meeting state and searches titles and projects; the detail page shows the stage bar, the rounds, the side cards, the objection ledger and the artifacts. All copy lives in a typed locale dictionary with eight shipped languages. This package adds no model-facing input.
+This plugin connects project work and meetings to the main conversation. Project progress remains in the sidebar workspace. The conversation header More menu prepares a meeting request or opens actual meetings initiated by that conversation; there is no separate meeting sidebar entry. Participant opinions and versioned main-assistant conclusions are displayed separately.
 
 ## Table of Contents
 
@@ -18,72 +18,60 @@ This package adds the meeting pages to the Web client: a sidebar entry opens the
 - [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
 
------
-
-<a id="use-this-package"></a>
 ## Use this package
 
-The sidebar shows a **Meetings** entry with a people glyph. Selecting it opens the meeting list in the main panel; the same entry stays selected while the list shows the detail page of one meeting.
+Use Ask assistant to arrange a meeting in the main conversation header More menu. It prepares an unsent request in that exact conversation, preserving existing draft text. Meetings in this conversation opens retained discussions, participant conversation links, conclusion revisions and follow-up actions. Recording a conclusion does not confirm a project requirement.
 
-The list page shows the title **Meetings** and a primary **New meeting** button, a segmented filter with **All**, **In progress**, **Awaiting my review** and **Completed**, and a search field. Every row shows the meeting title with its project, the meeting state as a colored dot with its label, up to three member avatars followed by a count of the rest, the round progress as `done/total`, the time since the last update, and the current plan version with its review state. A meeting that matches neither the filter nor the search query leaves the list empty and says so; a profile without any meeting shows the empty state that points at the main assistant.
+The project workspace shows saved employees, teams, latest plan versions, sourced background, actual checkpoints, handoffs and acceptance reports. Plan editing, saved-plan execution, corrections and released execution continuation prepare drafts in the associated main conversation. A legacy plan with no known main conversation offers an explicit handoff draft that asks the assistant to preserve the content and save a newly associated revision for confirmation.
 
-The detail page shows the meeting title, its state, a **Pause** and an **Add round** button, and a five-step stage bar: independent first round, discussion, synthesis, independent final review and published. The rounds appear as a timeline; a speech names its role, its model and its time, and a discussion speech quotes the round and role it answers. A first-round draft of another role stays hidden behind a striped placeholder that names the publication rule, because the first round is independent until the final review. The side column holds the controls with the call budget, the read-only materials, the plan versions with the review state, and the members with their permissions. Below the rounds, the objection ledger lists each claim with its author, verdict and basis, and the artifacts list the delivered files with an **Accept** action.
+Task execution links open the existing subagent conversation using its recorded direct parent and child identities. The existing root subagent catalog also receives a project-task footer from the same checkpoint source. Produced counts remain distinct from acceptance; this footer does not create or complete Team service tasks.
 
-The pages read the records their registrant injects. This package ships six sample meetings with three full records, in the language of the reader's interface for the chrome and in the sample language of the records themselves.
+| Control | Effect |
+|---|---|
+| Confirm this version | Confirms the exact latest plan revision. |
+| Confirm acceptance and release | Rechecks files and releases a passing human-review node. |
+| Continue downstream tasks | Prepares an exact-checkpoint continuation draft in the original main conversation. |
+| Ask the main assistant to repair | Prepares a failed-checkpoint draft within the confirmed attempt limit. Retains earlier reports and opens the latest task worker. |
+| Refresh progress | Reloads the retained project catalog or selected conversation meetings. |
 
------
-
-<a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-<details>
-<summary>Implementation internals — click to expand</summary>
+The plugin mounts the Host projectDashboard Remote and registers panels, a sessionHeader context-menu contribution and the existing subagent footer through reversible effects. Meeting selection aborts the previous query; late results cannot populate another conversation. Disposal aborts and joins outstanding queries. Model work starts only after the user sends a prepared draft or the main assistant calls its tools.
 
-The Client export registers its locale dictionary and two slots through Cordis effects; it mounts no Remote namespace. The main slot is keyed by the panel id `meeting-room`, and the `sidebar.panellist` list carries the same id, so the sidebar row and the panel occupant share one identity. Disposing the plugin fiber removes both registrations and the dictionary.
+SessionMeetings renders actual Host records. ProjectPage and SessionProjects share one project checkpoint source. The older prototype meeting components remain unmounted and do not supply product data.
 
-The panel keeps its viewing state in a declared store: the open meeting, the list filter and the search query. Components read the state through the framework's selector hook and write through the declared actions. The panel renders the list page while no meeting is open, and the detail page of the open meeting otherwise.
-
-Copy lives in one typed dictionary; the sample records live in a separate module and stay in their own language. The registration injects the records, so a later Host source replaces them without touching the pages.
-
-| File | Role |
-|---|---|
-| [`src/client/index.ts`](src/client/index.ts) | Dictionary, main panel and sidebar entry registrations |
-| [`src/client/MeetingRoomPanel.tsx`](src/client/MeetingRoomPanel.tsx) | Chooses the list page or the detail page |
-| [`src/client/MeetingListPage.tsx`](src/client/MeetingListPage.tsx) | Filter, search and the meeting rows |
-| [`src/client/MeetingDetailPage.tsx`](src/client/MeetingDetailPage.tsx) | Stage bar, round timeline, side cards, ledger and artifacts |
-| [`src/client/meeting-store.ts`](src/client/meeting-store.ts) | Viewing state of the panel |
-| [`src/client/meeting-format.ts`](src/client/meeting-format.ts) | Status, stage, permission and relative-time helpers |
-| [`src/client/demo-data.ts`](src/client/demo-data.ts) | Sample meetings and their full records |
-| [`src/client/locales.ts`](src/client/locales.ts) | Page copy in eight languages |
-| [`src/index.ts`](src/index.ts) | Inert Host entry |
-
-</details>
-
------
-
-<a id="further-exploration"></a>
 ## Further Exploration
 
-- [Meeting room host plugin](../meeting-room/README.md) — the meeting service, the `meeting_start` tool and the SQLite index.
-- [Product design](../../../docs/meeting-room/02-产品设计与交互.md) — the information architecture these pages follow.
-- [UI specification](../../../docs/meeting-room/08-UI出图需求.md) — the layout, colors and sample content of both pages.
+- [Meeting Host](../meeting-room/README.md) — discussion execution, retained conclusions and project tools.
+- [Subagent interface](../../client/ui-subagent/README.md) — existing execution conversations and navigation.
+- [Team interface](../../client/ui-agent-team/README.md) — the independent shared-task board.
 
------
-
-<a id="model-experience"></a>
 ## Model Experience
 
-None, as these pages render records their registrant injects and add no model-facing input.
+### Main-conversation drafts
+
+#### What the model sees
+
+Project drafts carry references such as `projectId` and `expectedCheckpoint`; meeting drafts request `meeting_start` and `meeting_record_decision`. They become ordinary user input only when sent. Reading menus and reports adds no model requests.
+
+#### Token effect
+
+Only sent draft content adds user-input tokens. The Host plugin owns tool declarations and worker prompts.
 
 #### KV Cache effect
 
-No direct effect; the meeting service and the `meeting_start` tool own any later model-visible use.
+Sent drafts append to conversation history. Existing draft text is preserved and followed by the prepared request.
 
 ## Known Limitations and Deferred Work
 
-<a id="known-limitations-and-deferred-work"></a>
+- Progress and meetings require manual refresh; there is no project event subscription.
+- Meetings execute independent first rounds sequentially; automatic debate, requirement confirmation and task scheduling from conclusions are not implemented.
+- Task links are available only when the execution recorded a direct parent and child address. Historical unlinked meeting rows are retained without guessing an initiating conversation.
+- Project task summaries reuse the subagent footer but are not synchronized into the Team service task lifecycle.
+- Main-conversation corrections prepare a revised plan; immediate mid-tool steering and automatic rework remain pending.
 
-- **Sample records only** — the pages read the sample meetings shipped with the package; no Host source feeds them yet.
-- **Read-only pages** — the filter, the search and the buttons change local view state only; creating a meeting, pausing one or accepting an artifact belongs to the Host service.
-- **No product navigation** — the sidebar entry opens one panel; the product's own navigation belongs to the meeting room shell described in the product design.
+### Dev Note
+
+The source registrations own navigation and query lifetime; components receive records and callbacks through typed injection. UI copy belongs to the locale dictionaries.

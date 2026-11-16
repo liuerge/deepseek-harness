@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/meeting-room-acceptance/guide.md
+/:
+  en: ec100cb9eced7031
+  zh: 23c2555a723e112b
+/meeting-room-acceptance-services:
+  en: fbdcb088644107b9
+  zh: bc2d1e94ca683a74
+/meeting-room-acceptance-services/change:
+  en: eb01d74d7cfb1fcb
+  zh: 78af64847fb2c860
+/meeting-room-acceptance-services/migration:
+  en: 8b65b64d17b4fbb2
+  zh: bd370e5d88c74076

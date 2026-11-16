@@ -28,6 +28,15 @@
     },
     {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

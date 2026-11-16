@@ -139,6 +139,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   storageDomain: 'storage.md',
   subagentModelSelection: 'subagent.md',
   subagents: 'subagent.md',
+  meetingRoom: 'subagent.md',
   subprocess: 'subprocess.md',
   systemPrompt: 'system-prompt.md',
   jobs: 'jobs.md',
@@ -184,6 +185,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  projectDashboard: 'experimental authenticated project Remote internal to meeting-room — packages/experimental/meeting-room/README.md owns its behavior',
   timeline: 'experimental session data service internal to the bundle — packages/experimental/timeline/README.md owns its behavior',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',
@@ -1053,6 +1055,8 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  MeetingStartRequest: 'packages/experimental/meeting-room/README.md',
+  MeetingStartResult: 'packages/experimental/meeting-room/README.md',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',

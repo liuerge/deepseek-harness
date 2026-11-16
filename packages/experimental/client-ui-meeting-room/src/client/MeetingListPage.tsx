@@ -62,13 +62,13 @@ export function MeetingListPage(props: MeetingListPageProps): ReactElement {
           label={t('list.filter.all')}
           value={filter}
           options={FILTERS.map(option => ({ value: option.value, label: t(option.key) }))}
-          onChange={next => actions.setFilter(next)}
+          onChange={(next) =>{  actions.setFilter(next) }}
         />
         <div className={css.search}>
           <Input
             value={query}
             placeholder={t('list.search')}
-            onChange={event => actions.setQuery(event.target.value)}
+            onChange={(event) =>{  actions.setQuery(event.target.value) }}
           />
         </div>
       </div>
@@ -83,7 +83,7 @@ export function MeetingListPage(props: MeetingListPageProps): ReactElement {
           <ul className={css.rows}>
             {visible.map(meeting => (
               <li key={meeting.id}>
-                <button type="button" className={css.row} onClick={() => actions.open(meeting.id)}>
+                <button type="button" className={css.row} onClick={() =>{  actions.open(meeting.id) }}>
                   <span className={css.rowMain}>
                     <span className={css.rowTitle}>{meeting.title}</span>
                     <span className={css.rowProject}>{meeting.project}</span>

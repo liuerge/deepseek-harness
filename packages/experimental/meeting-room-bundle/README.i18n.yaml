@@ -3,26 +3,26 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/meeting-room-bundle/README.md
 /:
-  en: 20a589dfad7b7360
-  zh: 4439cb5545989927
+  en: 56b41478eca81c9a
+  zh: d3ed48571315d25a
 /deepseek-ai-dsh-meeting-room-bundle:
   en: cc034d174f02bcd5
   zh: c40210d93de721ea
 /deepseek-ai-dsh-meeting-room-bundle/summary:
-  en: 2d96e0f13069f767
-  zh: 4d5f55734bb370de
+  en: 476647d388a028a3
+  zh: 0209cbfd52083afb
 /deepseek-ai-dsh-meeting-room-bundle/table-of-contents:
-  en: b563e4ec4727d0de
-  zh: e2e16626bf3f022f
+  en: d152484eb41ac6b4
+  zh: f0f7f88fe2f53b05
 /deepseek-ai-dsh-meeting-room-bundle/use-this-package:
-  en: 1fcaa580a3d7a759
-  zh: 12abd71d42817920
+  en: 650b711173bcdac5
+  zh: 32529bf4ffefab52
 /deepseek-ai-dsh-meeting-room-bundle/understand-the-implementation:
   en: 616b1202c5a60999
   zh: 71a03eb9e3e9f839
 /deepseek-ai-dsh-meeting-room-bundle/further-exploration:
-  en: 31850d4a1cd6d90f
-  zh: 2b1b2ec630f7d748
+  en: 5920406b6f917696
+  zh: d93cf6bdb4be441a
 /deepseek-ai-dsh-meeting-room-bundle/model-experience:
   en: f683e190ef839497
   zh: 9d72e92015ecc18f
@@ -31,4 +31,7 @@
   zh: 2d78e5eea2378f6d
 /deepseek-ai-dsh-meeting-room-bundle/known-limitations-and-deferred-work:
   en: 508340ced0454ea6
-  zh: a578e990bec29e25
+  zh: 81baa1482e23d685
+/deepseek-ai-dsh-meeting-room-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 4332677e12e0c8e0
+  zh: 399f0c9ddb8e9c22

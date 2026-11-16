@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'meetingRoom',
+    pkg: 'meeting-room',
+    title: 'Main-conversation project and meeting workflows',
+    mode: 'service',
+    consumers: ['client-ui-meeting-room'],
+    note: 'Coordinates participant subagents, versioned project plans, acceptance checkpoints and retained main-assistant conclusions.',
+  },
+  {
     key: 'actionCards',
     pkg: 'action-cards',
     title: 'Optional action cards',

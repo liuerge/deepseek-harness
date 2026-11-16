@@ -44,7 +44,7 @@ export function MeetingDetailPage(props: MeetingDetailPageProps): ReactElement {
   return (
     <section className={css.page}>
       <header className={css.heading}>
-        <Button variant="ghost" onClick={() => actions.close()}>{t('detail.back')}</Button>
+        <Button variant="ghost" onClick={() =>{  actions.close() }}>{t('detail.back')}</Button>
         <h1 className={css.title}>{summary?.title ?? ''}</h1>
         {summary === undefined
           ? null

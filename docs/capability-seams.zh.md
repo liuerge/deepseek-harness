@@ -9,6 +9,9 @@
 
 ```mermaid
 flowchart LR
+  pkg_meeting_room["meeting-room"]
+  svc_meetingRoom["ctx.meetingRoom<br/>Main-conversation project and meeting workflows"]
+  pkg_client_ui_meeting_room["client-ui-meeting-room"]
   pkg_action_cards["action-cards"]
   svc_actionCards["ctx.actionCards<br/>Optional action cards"]
   pkg_creation_recommendations["creation-recommendations"]
@@ -418,6 +421,7 @@ flowchart LR
   pkg_mcp_client --> svc_mcpResources
   pkg_mcp_manager --> svc_mcpManager
   pkg_mcp_resources --> svc_mcpResources
+  pkg_meeting_room --> svc_meetingRoom
   pkg_message_feedback --> svc_messageFeedback
   pkg_office_kit --> svc_officeKit
   pkg_otel --> svc_otel
@@ -553,6 +557,7 @@ flowchart LR
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
   svc_mcpResources --> pkg_mcp_resources
+  svc_meetingRoom --> pkg_client_ui_meeting_room
   svc_officeKit --> pkg_client_ui_sidebar_documentpreview
   svc_officeKit --> pkg_tool_office
   svc_otel --> pkg_host_product_telemetry_otel
@@ -669,6 +674,7 @@ flowchart LR
 
 | ctx 键 | 角色 | 所属包 | 实现 | 直接消费方 | 配套插件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.meetingRoom` | `service` | [`meeting-room`](../packages/experimental/meeting-room) | - | [`client-ui-meeting-room`](../packages/experimental/client-ui-meeting-room) | - | 协调角色子智能体、带版本的项目计划、验收检查点及主助手结论留存。 |
 | `ctx.actionCards` | `service` | [`action-cards`](../packages/experimental/action-cards) | - | [`creation-recommendations`](../packages/experimental/creation-recommendations), [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | - | 负责卡片工具、卡片状态、用户操作和状态通知；各卡片种类注册自己的动作和处理器。 |
 | `ctx.pluginRecommendations` | `service` | [`plugin-recommendations`](../packages/experimental/plugin-recommendations) | - | [`client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | - | 读取官方插件卡片的当前目录文本，并在用户点击后通过配置插件管理器启用该插件。 |
 | `ctx.deepseekChatImport` | `service` | [`deepseek-chat-import`](../packages/experimental/deepseek-chat-import) | - | - | - | 提供仅 owner 可用的上传路由，把 DeepSeek 会话导出的每个对话导入为一个会话，并提供浏览器先行检查的上传上限。 |

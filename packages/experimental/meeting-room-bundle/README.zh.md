@@ -1,15 +1,15 @@
 ---
 description: "在一个 profile bundle 中同时挂载会议服务与会议页面。"
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-meeting-room-bundle
 
 [English](README.md) | 中文
 
-## 摘要
+## 概述
 
-本 bundle 为 profile 组合会议室产品：包含 `meeting_start` 工具与 SQLite 索引的主机会议服务，以及会议列表页与会议详情页。列出本 bundle 的 profile 会同时挂载两半，因此侧栏入口与工具一并到位。bundle 自身不含运行时代码，其行都在 patch 文件中。本 bundle 不增加任何面向模型的输入。
+在 Web profile 中一起启用会议与项目流程的 Host 服务和 Client 界面。从主会话发起角色、查看既有子智能体记录，并分别留存角色意见和助手结论。项目工作台展示真实计划、进度与验收。模型路由和持久化在 profile 补丁中配置，bundle 自身不增加模型输入。
 
 ## 目录
 
@@ -18,13 +18,14 @@ kind: "package-reference"
 - [延伸阅读](#further-exploration)
 - [模型体验](#model-experience)
 - [已知限制与后续工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 profile 的 `dsh.profile.bundles` 数组中列出 `@deepseek-ai/dsh-meeting-room-bundle`。profile 组合器把 bundle 的 patch 应用到空的 profile 根配置上，插入两行：主机会议服务与会议页面。页面随后注册侧栏入口与主面板；服务注册 `meeting_start` 工具，因此模型可以发起会议，页面也能列出它落库的内容。
+将 `@deepseek-ai/dsh-meeting-room-bundle` 追加到现有 Web profile 的 `dsh.profile.bundles` 数组，在基础和 Web bundle 之后加载。它加入 Host 会议服务与 Client 界面。Client 提供项目工作台和主会话会议菜单，Host 提供工具与持久流程记录。基础组合提供所需的 Agent、文件、Session 和子智能体服务。
 
 bundle 不负责配置服务。服务自身的配置（`provider`、`agentOptions` 与 `databasePath`）属于 profile 的 patch 层，靠后的一层会替换该行的配置。
 
@@ -51,7 +52,7 @@ bundle 的实质是它的 patch 文件，由 `dsh.bundle.patch` 清单字段声�
 ## 延伸阅读
 
 - [会议室主机插件](../meeting-room/README.zh.md) —— 会议服务、`meeting_start` 工具与 SQLite 索引。
-- [会议页面](../client-ui-meeting-room/README.zh.md) —— 会议列表、会议详情页与侧栏入口。
+- [会议页面](../client-ui-meeting-room/README.zh.md) —— 项目工作台和会话会议菜单。
 
 -----
 
@@ -70,3 +71,8 @@ bundle 的实质是它的 patch 文件，由 `dsh.bundle.patch` 清单字段声�
 
 - **自身不带配置** —— 服务的 provider、模型路由与数据库路径仍放在 profile 的 patch 层。
 - **两行合为一个产品** —— bundle 挂载两半；只要页面的 profile 可以直接列 client 包。
+
+<a id="dev-note"></a>
+### 开发备注
+
+补丁仅负责组合，流程行为和导航分别由 Host 与 Client 包 README 描述。
