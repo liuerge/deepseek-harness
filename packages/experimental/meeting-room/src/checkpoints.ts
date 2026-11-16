@@ -14,6 +14,7 @@ export const executionCheckpointSchema = z.object({
   childSessionId: z.string().optional(), parentSessionId: z.string().optional(),
   planId: z.string().transform(id => brandString<ProjectPlanId>(id)).optional(),
   planRevision: z.number().int().positive().optional(), report: acceptanceReportSchema.optional(),
+  teamLink: z.enum(['linked', 'disabled', 'unavailable']).optional(),
   tasks: z.array(z.object({ role: z.string(), instruction: z.string(), acceptance: z.string() })).optional(),
 })
 

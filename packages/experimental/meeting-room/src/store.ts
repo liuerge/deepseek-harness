@@ -2,13 +2,16 @@
 import { DatabaseSync } from 'node:sqlite'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { employeeSchema, teamSchema } from './roster.ts'
-import type { Employee, EmployeeId, ProjectTeam, ProjectTeamId, ProjectPlan, ProjectPlanId, ProjectExecutionId, MeetingRecord } from './types.ts'
+import type {
+  Employee, EmployeeId, ProjectTeam, ProjectTeamId, ProjectPlan, ProjectPlanId, ProjectExecutionId, MeetingRecord,
+  ProjectTeamTaskId, ProjectTeamTaskLink,
+} from './types.ts'
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { projectPlanSchema } from './plans.ts'
 import { executionCheckpointSchema, type ExecutionCheckpoint } from './checkpoints.ts'
 
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 
 /** One stored round pointing back at the child Session that produced it. */
 export interface StoredRound {
@@ -100,6 +103,16 @@ export class MeetingStore {
         revision INTEGER NOT NULL,
         project_id TEXT NOT NULL,
         PRIMARY KEY (id, revision)
+      );
+      CREATE TABLE IF NOT EXISTS project_team_tasks (
+        project_id TEXT NOT NULL,
+        task_index INTEGER NOT NULL,
+        plan_id TEXT NOT NULL,
+        plan_revision INTEGER NOT NULL,
+        team_task_id TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        PRIMARY KEY (project_id, task_index)
       );
     `)
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
@@ -323,6 +336,65 @@ export class MeetingStore {
         .all(sessionId, limit).map(row => String(row['record']))
     } catch (cause) {
       throw new HarnessError('Project checkpoints could not be read.', 'PROJECT_RECORDS_UNAVAILABLE', { cause })
+    }
+  }
+
+  /**
+   * Read the Team task associations of one project execution.
+   * @param projectId - Execution identity.
+   * @returns Associations in task order.
+   */
+  teamTasks(projectId: ProjectExecutionId): ProjectTeamTaskLink[] {
+    return this.decodeTeamTasks(this.db.prepare(`SELECT project_id, task_index, plan_id, plan_revision, team_task_id, revision, status
+      FROM project_team_tasks WHERE project_id = ? ORDER BY task_index`).all(projectId))
+  }
+
+  /**
+   * Read every Team task association retained on this Host.
+   * @returns Associations grouped by execution and task order.
+   */
+  allTeamTasks(): ProjectTeamTaskLink[] {
+    return this.decodeTeamTasks(this.db.prepare(`SELECT project_id, task_index, plan_id, plan_revision, team_task_id, revision, status
+      FROM project_team_tasks ORDER BY project_id, task_index`).all())
+  }
+
+  /** Decode stored association rows into typed links. */
+  private decodeTeamTasks(rows: Record<string, unknown>[]): ProjectTeamTaskLink[] {
+    const rowSchema = z.object({
+      project_id: z.string().min(1),
+      task_index: z.number().int().nonnegative(),
+      plan_id: z.string().min(1),
+      plan_revision: z.number().int().positive(),
+      team_task_id: z.string().min(1),
+      revision: z.number().int().positive(),
+      status: z.enum(['pending', 'in_progress', 'completed', 'deleted']),
+    })
+    return rows.map((row) => {
+      const value = rowSchema.parse(row)
+      return {
+        projectId: brandString<ProjectExecutionId>(value.project_id), index: value.task_index,
+        planId: brandString<ProjectPlanId>(value.plan_id), planRevision: value.plan_revision,
+        taskId: brandString<ProjectTeamTaskId>(value.team_task_id), revision: value.revision, status: value.status,
+      }
+    })
+  }
+
+  /**
+   * Save the latest observed Team task revision and status for one project task.
+   * @param link - Complete association; project and task position identify the row.
+   */
+  saveTeamTask(link: ProjectTeamTaskLink): void {
+    try {
+      this.db.prepare(`INSERT INTO project_team_tasks
+        (project_id, task_index, plan_id, plan_revision, team_task_id, revision, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, task_index) DO UPDATE SET
+          plan_id = excluded.plan_id, plan_revision = excluded.plan_revision,
+          team_task_id = excluded.team_task_id, revision = excluded.revision, status = excluded.status`)
+        .run(link.projectId, link.index, link.planId, link.planRevision, link.taskId, link.revision, link.status)
+    } catch (cause) {
+      throw new HarnessError('The Team task association could not be saved. Inspect the board and project checkpoints before retrying.',
+        'PROJECT_TEAM_LINK_FAILED', { cause })
     }
   }
 

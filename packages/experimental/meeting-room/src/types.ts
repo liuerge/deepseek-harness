@@ -157,6 +157,30 @@ export interface PlanTask {
   review?: TaskAcceptance | undefined
 }
 
+/** Team shared-task identity recorded by one project association. */
+export type ProjectTeamTaskId = Branded<'ProjectTeamTaskId'>
+
+/** Whether a plan run was mirrored onto the Team shared task board when admitted. */
+export type ProjectTeamLinkState = 'linked' | 'disabled' | 'unavailable'
+
+/** Durable association between one plan task and its Team shared task. */
+export interface ProjectTeamTaskLink {
+  /** Execution identity shared by project checkpoints. */
+  projectId: ProjectExecutionId
+  /** Zero-based task position in the confirmed plan. */
+  index: number
+  /** Confirmed plan identity. */
+  planId: ProjectPlanId
+  /** Confirmed plan content revision. */
+  planRevision: number
+  /** Team task mirrored from this project task. */
+  taskId: ProjectTeamTaskId
+  /** Latest Team task revision observed by the project. */
+  revision: number
+  /** Latest Team task status observed by the project. */
+  status: 'pending' | 'in_progress' | 'completed' | 'deleted'
+}
+
 /** Immutable plan content, with confirmation derived from the saved user action. */
 export interface ProjectPlan {
   /** Main conversation that owns planning and user corrections; absent on legacy records. */

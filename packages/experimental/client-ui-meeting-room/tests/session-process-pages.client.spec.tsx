@@ -46,6 +46,25 @@ it.each([0, 1])('keeps both review generations and routes only authorized repair
   expect(openWorker).toHaveBeenCalledWith('main', 'repair-worker')
 })
 
+it('shows the Team task association and warns when the execution was not mirrored', () => {
+  const records: ProjectCheckpoint[] = [
+    { sessionId: 'main', projectId: 'project', checkpoint: 1, state: 'started', goal: 'Team project', teamLink: 'disabled',
+      tasks: [{ role: 'Writer', instruction: 'Write', acceptance: 'Check' }] },
+    { sessionId: 'main', projectId: 'project', checkpoint: 2, state: 'running', index: 0,
+      teamTask: { id: 'task-3', revision: 2, status: 'in_progress' } },
+  ]
+  const catalog = { records, employees: [], teams: [], plans: [], loading: false, failed: false }
+  const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
+  const noop = vi.fn()
+  render(<ProjectPage {...{
+    useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
+    configureTeam: noop, delegateTeam: noop, preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan: noop,
+  } as Parameters<typeof ProjectPage>[0]} />)
+  expect(screen.getByText(zh['project.team-disabled'])).toBeTruthy()
+  expect(screen.getByText('Team 共享任务 task-3 · 执行中')).toBeTruthy()
+})
+
 it('separates participant opinions from recorded main-assistant conclusions and opens the exact participant conversation', () => {
   const catalog: MeetingCatalog = { sessionId: 'main', loading: false, failed: false, meetings: [{
     id: 'meeting' as MeetingCatalog['meetings'][number]['id'], sessionId: 'main', originSessionId: 'main',

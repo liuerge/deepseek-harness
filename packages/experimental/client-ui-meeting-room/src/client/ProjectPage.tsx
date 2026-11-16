@@ -20,6 +20,8 @@ export interface ProjectCheckpoint {
   index?: number | undefined
   role?: string | undefined
   tasks?: { role: string; instruction: string; acceptance: string }[] | undefined
+  teamLink?: 'linked' | 'disabled' | 'unavailable' | undefined
+  teamTask?: { id: string; revision: number; status: 'pending' | 'in_progress' | 'completed' | 'deleted' } | undefined
 }
 
 /** Project and roster data plus user actions supplied by the registration. */
@@ -163,6 +165,8 @@ export function ProjectPage(props: Props) {
       const stateKey = states[latest.state as keyof typeof states]
       return <article key={id} className={css.project}>
         <header className={css.header}><h2>{plan?.goal ?? id}</h2><span>{t(stateKey)}</span></header>
+        {plan?.teamLink === 'disabled' && <p className={css.secondary}>{t('project.team-disabled')}</p>}
+        {plan?.teamLink === 'unavailable' && <p className={css.secondary}>{t('project.team-unavailable')}</p>}
         <Button onClick={() => { openMain(records[0]?.sessionId ?? latest.sessionId, id) }}>{t('project.correct-main')}</Button>
         {latest.state === 'awaiting-acceptance' && <p role="status">{t('review.pending')}</p>}
         {latest.state === 'awaiting-human' && <Button variant="primary" disabled={catalog.loading}
@@ -200,8 +204,12 @@ export function ProjectPage(props: Props) {
             && (record.state === 'task-produced' || record.state === 'running') && record.childSessionId && record.parentSessionId)
           const parentId = worker?.parentSessionId
           const childId = worker?.childSessionId
+          const teamTask = records.findLast(record => record.index === index && record.teamTask)?.teamTask
           return <li key={index}><strong>{task.role}</strong>{produced && <span>{t('project.task-produced')}</span>}
             <p>{task.instruction}</p><p className={css.secondary}>{task.acceptance}</p>
+            {teamTask && <p className={css.secondary}>
+              {t('project.team-task', { id: teamTask.id, status: t(`project.team-status.${teamTask.status}`) })}
+            </p>}
             {parentId && childId && <Button onClick={() => { openWorker(parentId, childId) }}>{t('project.open-worker')}</Button>}
           </li>
         })}</ol>

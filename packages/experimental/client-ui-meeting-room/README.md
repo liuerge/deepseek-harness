@@ -24,9 +24,9 @@ This plugin connects project work and meetings to the main conversation. Project
 
 Use Ask assistant to arrange a meeting in the main conversation header More menu. It prepares an unsent request in that exact conversation, preserving existing draft text. Meetings in this conversation opens retained discussions, participant conversation links, conclusion revisions and follow-up actions. Recording a conclusion does not confirm a project requirement.
 
-The project workspace shows saved employees, teams, latest plan versions, sourced background, actual checkpoints, handoffs and acceptance reports. Plan editing, saved-plan execution, corrections and released execution continuation prepare drafts in the associated main conversation. A legacy plan with no known main conversation offers an explicit handoff draft that asks the assistant to preserve the content and save a newly associated revision for confirmation.
+The project workspace shows saved employees, teams, latest plan versions, sourced background, actual checkpoints, handoffs, acceptance reports and the Team task identity and status recorded for each task. Plan editing, saved-plan execution, corrections and released execution continuation prepare drafts in the associated main conversation. A legacy plan with no known main conversation offers an explicit handoff draft that asks the assistant to preserve the content and save a newly associated revision for confirmation.
 
-Task execution links open the existing subagent conversation using its recorded direct parent and child identities. The existing root subagent catalog also receives a project-task footer from the same checkpoint source. Produced counts remain distinct from acceptance; this footer does not create or complete Team service tasks.
+Task execution links open the existing subagent conversation using its recorded direct parent and child identities. The existing root subagent catalog also receives a project-task footer from the same checkpoint source. Produced counts remain distinct from acceptance; this footer displays Team task identities and statuses but never changes them.
 
 | Control | Effect |
 |---|---|
@@ -69,7 +69,7 @@ Sent drafts append to conversation history. Existing draft text is preserved and
 - Progress and meetings require manual refresh; there is no project event subscription.
 - Meetings execute independent first rounds sequentially; automatic debate, requirement confirmation and task scheduling from conclusions are not implemented.
 - Task links are available only when the execution recorded a direct parent and child address. Historical unlinked meeting rows are retained without guessing an initiating conversation.
-- Project task summaries reuse the subagent footer but are not synchronized into the Team service task lifecycle.
+- The workspace displays Team task linkage but does not offer direct Team task edits; use the Team board for ownership or dependency changes.
 - Main-conversation corrections prepare a revised plan; immediate mid-tool steering and automatic rework remain pending.
 
 ### Dev Note

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Run independent meeting participants from a main conversation and inspect their existing subagent Sessions. Retain participant opinions separately from versioned main-assistant conclusions; conclusions do not confirm plans or schedule tasks. Save reusable teams and sourced project plans, then execute confirmed versions with per-node acceptance and checkpoint-based continuation. The authenticated project dashboard reads actual records; progress queries currently require manual refresh.
+Run independent meeting participants from a main conversation and inspect their existing subagent Sessions. Retain participant opinions separately from versioned main-assistant conclusions; conclusions do not confirm plans or schedule tasks. Save reusable teams and sourced project plans, then execute confirmed versions with per-node acceptance and checkpoint-based continuation. When Agent Teams is enabled, admitted plan tasks are mirrored to its shared task board while project acceptance remains the release authority. The authenticated project dashboard reads actual records; progress queries currently require manual refresh.
 
 ## Table of Contents
 
@@ -65,7 +65,7 @@ Failed acceptance retains its report and blocks downstream work. A confirmed `re
 
 ### Reusable employees and teams
 
-`employee_list` returns the Host's saved employees and team templates. `employee_save` saves a name, responsibilities, explicit provider/model and optional registered DSH `preset`. `team_save` saves a team of distinct existing employee ids. Creation omits the id and uses `expectedRevision: 0`; updates use the current id and revision. A stale save fails with `PROJECT_ROSTER_STALE`. The file database preserves these records across restart and upgrades the existing project database to schema version 4 while retaining history.
+`employee_list` returns the Host's saved employees and team templates. `employee_save` saves a name, responsibilities, explicit provider/model and optional registered DSH `preset`. `team_save` saves a team of distinct existing employee ids. Creation omits the id and uses `expectedRevision: 0`; updates use the current id and revision. A stale save fails with `PROJECT_ROSTER_STALE`. The file database preserves these records across restart and upgrades the existing project database to schema version 5 while retaining history.
 
 Pass `employeeId` on a project task to use that employee's model, instructions and optional preset. An omitted preset uses the caller composition. Pass `teamId` to require every task's employee to belong to that saved team. Admission resolves all task references before execution and checkpoints the employee and team revisions. Later roster edits affect later runs. Existing tasks without employee ids keep their previous behavior.
 
@@ -79,6 +79,14 @@ The roster tools and the dashboard catalog operate across this Host. Model route
 
 Tasks execute sequentially within a call. Separate calls share their caller's workspace and require coordination. Cancellation stops remaining tasks and disposes the current child; file and external tool effects may already exist. Automatic restart, project-wide pause and full knowledge retrieval are pending. Queries are count-bounded; handoff size follows worker output limits.
 
+### Team shared tasks
+
+When the initiating root has Agent Teams enabled, admitting a confirmed plan creates one shared task per plan task before any worker starts. Tasks carry the employee, instruction, acceptance text and a stable marker; each task depends on the preceding one, so an unreleased node keeps downstream work blocked. The project database stores the association and latest observed revision. The dispatched worker Session claims its task through the Team service; project acceptance remains the release authority.
+
+Automatic release completes the task after the project records `acceptance-passed`. Human release stays `in_progress` until the release is synchronized during the next accepted continuation. Failed acceptance, repair, blocking and interruption keep the task `in_progress` with its worker, and the project checkpoint records the real reason. Repeated admission reuses a durably admitted run and adopts marker-matched tasks instead of creating duplicates.
+
+Team mode off at admission records `teamLink: disabled` and runs project-only; a missing Team service records `unavailable`. Turning Team mode off after linking stops the next dispatch or continuation with `PROJECT_TEAM_DISABLED`; re-enable it and inspect the board before continuing. Deleted, completed-ahead or missing Team tasks stop the run for inspection. Existing unlinked executions are not retroactively linked. The optional integration lives in `src/team-link.ts`; `src/store.ts` owns the association table.
+
 ## Understand the implementation
 
 <details>
@@ -88,7 +96,7 @@ startMeeting(request, signal, caller) uses the supplied main agent as the partic
 
 Isolation is a property of prompt construction, not of filtering existing context: `rolePrompt` emits the shared goal, the role name, and that role's brief. A future discussion round that must read earlier drafts would have to build that text explicitly, which keeps the first round independent by construction.
 
-SQLite schema version 4 retains meeting associations, participant outputs and immutable conclusion revisions. Existing meetings and rounds remain stored; unlinked historical rows are not assigned to a conversation. A failed final checkpoint reports unknown saved state and requires inspection before retrying.
+SQLite schema version 5 retains meeting associations, participant outputs, immutable conclusion revisions and Team task associations. Existing meetings and rounds remain stored; unlinked historical rows are not assigned to a conversation. A failed final checkpoint reports unknown saved state and requires inspection before retrying.
 
 </details>
 
@@ -134,7 +142,7 @@ Each child Session starts empty, so roles share no cacheable prefix and every fi
 
 #### What the model sees
 
-Execution exposes the goal, ordered instructions and acceptance criteria, returning a project id, review state and final handoff. Record queries return caller-owned checkpoints. Roster queries return Host-wide employee and team records. Employee responsibilities and the selected revision enter the worker prompt. Saved-plan execution also includes its exact background content and source references. Worker prompts contain the goal, task and previous handoff. Reviewers also receive the confirmed criteria, author handoff and observed artifact versions, with a child-scoped structured-output tool. Continued workers receive released reports in their logged prompts.
+Execution exposes the goal, ordered instructions and acceptance criteria, returning a project id, review state, Team link state and final handoff. Record queries return caller-owned checkpoints. Roster queries return Host-wide employee and team records. Employee responsibilities and the selected revision enter the worker prompt. Saved-plan execution also includes its exact background content and source references. Worker prompts contain the goal, task and previous handoff. Reviewers also receive the confirmed criteria, author handoff and observed artifact versions, with a child-scoped structured-output tool. Continued workers receive released reports in their logged prompts.
 
 #### Token effect
 
@@ -150,6 +158,8 @@ Tool results append to caller history. Each worker starts a fresh child Session.
 - Rounds run serially; parallel rounds need explicit working-directory and ownership decisions.
 - Further discussion rounds and automatic scheduling from meeting conclusions are not implemented.
 - The conversation menu reads actual linked meetings; historical rows without a known initiating conversation remain index-only.
+- Team mirroring follows plan order only; parallel dependencies, multi-project queues and cross-process recovery remain pending.
+- Team ownership or dependency edits made directly on the Team board are not reconciled; a deleted, completed-ahead or missing task stops project execution for inspection.
 
 ### Dev Note
 

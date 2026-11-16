@@ -9,8 +9,8 @@
   en: cd5b534fc4b99120
   zh: dd1c6426d283c793
 /deepseek-ai-dsh-meeting-room/summary:
-  en: 54a2228b7f4f3fad
-  zh: 2b5903f64b758dac
+  en: 809a70b71e46e532
+  zh: e51b99a6d62a3b9c
 /deepseek-ai-dsh-meeting-room/table-of-contents:
   en: d152484eb41ac6b4
   zh: f0f7f88fe2f53b05
@@ -24,14 +24,17 @@
   en: a00c2bd6894a9711
   zh: 0e0703ea36c1194e
 /deepseek-ai-dsh-meeting-room/use-this-package/reusable-employees-and-teams:
-  en: cbb5e625fd74ac51
-  zh: a7ffc85fad96c85d
+  en: dba45597494d33bb
+  zh: e4b463e0af0f0d33
 /deepseek-ai-dsh-meeting-room/use-this-package/project-execution:
   en: c033f81fb337601f
   zh: 283a93fe71be8fb3
+/deepseek-ai-dsh-meeting-room/use-this-package/team-shared-tasks:
+  en: a8094ad7760dd6b2
+  zh: e8bbacb9a0a4a519
 /deepseek-ai-dsh-meeting-room/understand-the-implementation:
-  en: d8fcf733c75fa32b
-  zh: 2ee5800969656a82
+  en: 0adbeb90fdf1ba7e
+  zh: 0e769e8d2b082d9e
 /deepseek-ai-dsh-meeting-room/further-exploration:
   en: c71854e51cadad29
   zh: ea275b7f0323383a
@@ -66,7 +69,7 @@
   en: 01baac9a17865388
   zh: b1bc56f73f8cefa3
 /deepseek-ai-dsh-meeting-room/model-experience/project-tools/what-the-model-sees:
-  en: 109d0b9eaefd1290
+  en: 8eec77811c955162
   zh: cb7e1b3913554588
 /deepseek-ai-dsh-meeting-room/model-experience/project-tools/token-effect:
   en: 740412292e579a73
@@ -75,8 +78,8 @@
   en: 37368e273ae22592
   zh: aae1a23063337298
 /deepseek-ai-dsh-meeting-room/known-limitations-and-deferred-work:
-  en: d033d2df69a68262
-  zh: 0d2e33abce8a7ca7
+  en: 9a9fa4a218a0965a
+  zh: 0558f6743ebabf3e
 /deepseek-ai-dsh-meeting-room/known-limitations-and-deferred-work/dev-note:
   en: 423e4fe135e28558
   zh: f4c1caa2958679b5

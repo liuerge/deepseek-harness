@@ -2,7 +2,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { MeetingStore } from './store.ts'
-import type { Employee, ProjectTeam, ProjectPlan, ProjectPlanId, ProjectExecutionId, AcceptanceReport, MeetingRecord } from './types.ts'
+import type {
+  Employee, ProjectTeam, ProjectPlan, ProjectPlanId, ProjectExecutionId, AcceptanceReport, MeetingRecord,
+  ProjectTeamTaskLink,
+} from './types.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { verifyAcceptanceArtifacts } from './acceptance.ts'
@@ -125,12 +128,23 @@ export default class ProjectDashboard extends TypertRemoteService {
     index?: number | undefined
     role?: string | undefined
     tasks?: { role: string; instruction: string; acceptance: string }[] | undefined
+    teamLink?: 'linked' | 'disabled' | 'unavailable' | undefined
+    teamTask?: { id: string; revision: number; status: ProjectTeamTaskLink['status'] } | undefined
   }[]> {
     signal.throwIfAborted()
-    return Promise.resolve(this.store.projectTimeline().map(row => ({
-      sessionId: row.sessionId,
-      checkpoint: row.checkpoint,
-      ...executionCheckpointSchema.parse(JSON.parse(row.record)),
-    })))
+    const links = new Map<string, Map<number, ProjectTeamTaskLink>>()
+    for (const link of this.store.allTeamTasks()) {
+      const byIndex = links.get(link.projectId) ?? new Map<number, ProjectTeamTaskLink>()
+      byIndex.set(link.index, link)
+      links.set(link.projectId, byIndex)
+    }
+    return Promise.resolve(this.store.projectTimeline().map((row) => {
+      const parsed = executionCheckpointSchema.parse(JSON.parse(row.record))
+      const link = parsed.index === undefined ? undefined : links.get(parsed.projectId)?.get(parsed.index)
+      return {
+        sessionId: row.sessionId, checkpoint: row.checkpoint, ...parsed,
+        ...(link === undefined ? {} : { teamTask: { id: link.taskId, revision: link.revision, status: link.status } }),
+      }
+    }))
   }
 }

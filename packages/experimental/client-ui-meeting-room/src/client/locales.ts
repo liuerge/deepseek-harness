@@ -153,6 +153,13 @@ export const zh = {
   'member.host': '主持',
   'member.participant': '参与',
   'member.observer': '观察',
+  'project.team-task': 'Team 共享任务 {id} · {status}',
+  'project.team-status.pending': '待领取',
+  'project.team-status.in_progress': '执行中',
+  'project.team-status.completed': '已完成',
+  'project.team-status.deleted': '已删除',
+  'project.team-disabled': 'Team 模式未启用：本次执行只记录在项目检查点。',
+  'project.team-unavailable': 'Team 服务不可用：本次执行只记录在项目检查点。',
 } satisfies Record<string, string>
 
 /** Keys shared by every dictionary. */
@@ -308,6 +315,13 @@ export const en = {
   'member.host': 'Chair',
   'member.participant': 'Participant',
   'member.observer': 'Observer',
+  'project.team-task': 'Team task {id} · {status}',
+  'project.team-status.pending': 'Pending',
+  'project.team-status.in_progress': 'In progress',
+  'project.team-status.completed': 'Completed',
+  'project.team-status.deleted': 'Deleted',
+  'project.team-disabled': 'Team mode is off: this execution is recorded only in project checkpoints.',
+  'project.team-unavailable': 'The Team service is unavailable: this execution is recorded only in project checkpoints.',
 } satisfies Record<MeetingRoomKey, string>
 
 /** Japanese copy of the meeting pages. */
@@ -460,6 +474,13 @@ export const ja = {
   'member.host': '進行',
   'member.participant': '参加',
   'member.observer': '傍聴',
+  'project.team-task': 'Team 共有タスク {id} · {status}',
+  'project.team-status.pending': '未着手',
+  'project.team-status.in_progress': '実行中',
+  'project.team-status.completed': '完了',
+  'project.team-status.deleted': '削除済み',
+  'project.team-disabled': 'Team モードが無効です。この実行はプロジェクトのチェックポイントにのみ記録されます。',
+  'project.team-unavailable': 'Team サービスを利用できません。この実行はプロジェクトのチェックポイントにのみ記録されます。',
 } satisfies Record<MeetingRoomKey, string>
 
 /** Spanish copy of the meeting pages. */
@@ -612,6 +633,13 @@ export const es = {
   'member.host': 'Preside',
   'member.participant': 'Participa',
   'member.observer': 'Observa',
+  'project.team-task': 'Tarea compartida {id} · {status}',
+  'project.team-status.pending': 'Pendiente',
+  'project.team-status.in_progress': 'En curso',
+  'project.team-status.completed': 'Completada',
+  'project.team-status.deleted': 'Eliminada',
+  'project.team-disabled': 'El modo Team está desactivado: esta ejecución solo se registra en los puntos de control del proyecto.',
+  'project.team-unavailable': 'El servicio Team no está disponible: esta ejecución solo se registra en los puntos de control del proyecto.',
 } satisfies Record<MeetingRoomKey, string>
 
 /** French copy of the meeting pages. */
@@ -764,6 +792,13 @@ export const fr = {
   'member.host': 'Préside',
   'member.participant': 'Participe',
   'member.observer': 'Observe',
+  'project.team-task': 'Tâche partagée {id} · {status}',
+  'project.team-status.pending': 'En attente',
+  'project.team-status.in_progress': 'En cours',
+  'project.team-status.completed': 'Terminée',
+  'project.team-status.deleted': 'Supprimée',
+  'project.team-disabled': 'Le mode Team est désactivé : cette exécution est enregistrée uniquement dans les points de contrôle du projet.',
+  'project.team-unavailable': 'Le service Team est indisponible : cette exécution est enregistrée uniquement dans les points de contrôle du projet.',
 } satisfies Record<MeetingRoomKey, string>
 
 /** German copy of the meeting pages. */
@@ -916,6 +951,13 @@ export const de = {
   'member.host': 'Leitet',
   'member.participant': 'Nimmt teil',
   'member.observer': 'Beobachtet',
+  'project.team-task': 'Team-Aufgabe {id} · {status}',
+  'project.team-status.pending': 'Offen',
+  'project.team-status.in_progress': 'In Arbeit',
+  'project.team-status.completed': 'Abgeschlossen',
+  'project.team-status.deleted': 'Gelöscht',
+  'project.team-disabled': 'Der Team-Modus ist deaktiviert: Diese Ausführung wird nur in den Projekt-Checkpoints erfasst.',
+  'project.team-unavailable': 'Der Team-Dienst ist nicht verfügbar: Diese Ausführung wird nur in den Projekt-Checkpoints erfasst.',
 } satisfies Record<MeetingRoomKey, string>
 
 /** Russian copy of the meeting pages. */
@@ -1068,6 +1110,13 @@ export const ru = {
   'member.host': 'Ведёт',
   'member.participant': 'Участник',
   'member.observer': 'Наблюдатель',
+  'project.team-task': 'Задача Team {id} · {status}',
+  'project.team-status.pending': 'Ожидает',
+  'project.team-status.in_progress': 'Выполняется',
+  'project.team-status.completed': 'Завершена',
+  'project.team-status.deleted': 'Удалена',
+  'project.team-disabled': 'Режим Team отключён: этот запуск фиксируется только в контрольных точках проекта.',
+  'project.team-unavailable': 'Служба Team недоступна: этот запуск фиксируется только в контрольных точках проекта.',
 } satisfies Record<MeetingRoomKey, string>
 
 /** Portuguese copy of the meeting pages. */
@@ -1220,4 +1269,11 @@ export const pt = {
   'member.host': 'Preside',
   'member.participant': 'Participa',
   'member.observer': 'Observa',
+  'project.team-task': 'Tarefa compartilhada {id} · {status}',
+  'project.team-status.pending': 'Pendente',
+  'project.team-status.in_progress': 'Em andamento',
+  'project.team-status.completed': 'Concluída',
+  'project.team-status.deleted': 'Excluída',
+  'project.team-disabled': 'O modo Team está desativado: esta execução é registrada apenas nos pontos de verificação do projeto.',
+  'project.team-unavailable': 'O serviço Team não está disponível: esta execução é registrada apenas nos pontos de verificação do projeto.',
 } satisfies Record<MeetingRoomKey, string>

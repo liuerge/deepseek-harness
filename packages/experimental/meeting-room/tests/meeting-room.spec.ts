@@ -27,6 +27,8 @@ import MeetingRoom from '../src/index.ts'
 import type { EmployeeId, ProjectTeamId, ProjectExecutionId } from '../src/types.ts'
 import type {} from '../src/dashboard.ts'
 import LocalFileSystem from '../../../fs/fs-local/src/index.ts'
+import TeamService from '@deepseek-ai/dsh-agent-team'
+import { linkProjectTeamTasks, teamTaskMarker } from '../src/team-link.ts'
 
 const contexts: Context[] = []
 const directories: string[] = []
@@ -38,7 +40,7 @@ afterEach(async () => {
 })
 
 /** Meeting service over the real Agent loop, subagent runtime, and JSONL persistence. */
-async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0], options: { team?: boolean } = {}) {
   const ctx = new Context()
   contexts.push(ctx)
   const adapter = new MockAdapter(script)
@@ -52,6 +54,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(spawn, { providerName: 'meeting-test-spawn' })
+  if (options.team) await ctx.plugin(TeamService)
   await ctx.plugin(Loader)
   Object.assign(ctx.loader.builtins, { include: Include, 'meeting-product': MeetingRoom })
   const fixture = await readFile(new URL('./fixtures/project.yml', import.meta.url), 'utf8')
@@ -76,6 +79,9 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
   reworkLimit?: number
   repairVerdicts?: ('pass' | 'fail')[]
   downstreamReview?: boolean
+  downstreamVerdict?: 'pass' | 'fail'
+  team?: boolean
+  teamEnabled?: boolean
   repairGate?: { entered: () => void; wait: Promise<void> } } = {}) {
   let artifact = ''
   const script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('Author handoff')]
@@ -97,10 +103,12 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
   if (options.downstreamReview) {
     script.push(() => toolCallResponse('downstream-read', 'read', { file_path: artifact }))
     script.push(() => toolCallResponse('downstream-report', 'structured_output', { criteria: [{
-      id: 'AC-1', status: 'fail', notes: 'Downstream requires a separate change.', evidencePaths: [artifact],
+      id: 'AC-1', status: options.downstreamVerdict ?? 'fail',
+      notes: options.downstreamVerdict === 'pass' ? 'Downstream delivery checked.' : 'Downstream requires a separate change.',
+      evidencePaths: [artifact],
     }] }))
   }
-  const result = await setup(script)
+  const result = await setup(script, { team: options.team === true })
   const { ctx, directory, databasePath } = result
   artifact = join(directory, 'delivery.md')
   await writeFile(artifact, 'Confirmed delivery content')
@@ -141,6 +149,7 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
   store.confirmPlan(plan.id, 1)
   const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('delivery-caller'), agentOptions: { provider: 'mock', model: 'mock' } })
   await ctx.workingDirectory.set(caller.agent, directory)
+  if (options.team && options.teamEnabled !== false) await ctx.agentTeams.setEnabled(caller.agent, true)
   caller.agent.session.append('turn/start', { turn: 1 })
   let sequence = 0
   const execute = (args: object, signal = new AbortController().signal) => ctx.tools.execute({ agent: caller.agent, signal,
@@ -616,7 +625,7 @@ describe('meeting room', () => {
       expect(store.projectRecords('old-session', 1)).toEqual(['{"state":"awaiting-review"}'])
     } finally { store.close() }
     const database = new DatabaseSync(path)
-    try { expect(database.prepare('PRAGMA user_version').get()?.['user_version']).toBe(4) }
+    try { expect(database.prepare('PRAGMA user_version').get()?.['user_version']).toBe(5) }
     finally { database.close() }
   })
 
@@ -910,5 +919,132 @@ describe('meeting room', () => {
     } finally {
       await caller.dispose()
     }
+  })
+
+  it('links confirmed plan tasks to Team and completes them only after project release', async () => {
+    const { ctx, store, plan, caller, execute } = await acceptanceFixture('automatic', {
+      team: true, downstreamReview: true, downstreamVerdict: 'pass',
+    })
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const timeline = await ctx.projectDashboard.timeline(new AbortController().signal)
+      const initial = timeline.find(record => record.state === 'started')
+      if (!initial) throw new Error('expected a started checkpoint')
+      expect(initial.teamLink).toBe('linked')
+      const projectId = brandString<ProjectExecutionId>(initial.projectId)
+      const tasks = ctx.agentTeams.listTasks(caller.agent)
+      expect(tasks.map(task => task.status)).toEqual(['completed', 'completed'])
+      expect(tasks[1]?.blockedBy).toEqual([tasks[0]?.id])
+      const workers = store.execution(projectId).filter(entry => entry.state === 'task-produced')
+      expect(tasks.map(task => task.ownerId)).toEqual(workers.map(entry => entry.childSessionId))
+      expect(store.teamTasks(projectId).map(link => link.status)).toEqual(['completed', 'completed'])
+      expect(timeline.filter(record => record.teamTask).map(record => record.teamTask?.status)).toContain('completed')
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('keeps Team tasks claimed across human releases and syncs each release before continuation', async () => {
+    const { ctx, store, plan, caller, execute } = await acceptanceFixture('human', {
+      team: true, downstreamReview: true, downstreamVerdict: 'pass',
+    })
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      let timeline = await ctx.projectDashboard.timeline(new AbortController().signal)
+      let node = timeline.at(-1)
+      if (!node || node.state !== 'awaiting-human') throw new Error('expected a human release node')
+      let tasks = ctx.agentTeams.listTasks(caller.agent)
+      expect(tasks.map(task => task.status)).toEqual(['in_progress', 'pending'])
+      expect(tasks[1]?.blockedBy).toEqual([tasks[0]?.id])
+
+      await ctx.projectDashboard.confirmAcceptance(node.projectId, node.checkpoint, new AbortController().signal)
+      timeline = await ctx.projectDashboard.timeline(new AbortController().signal)
+      node = timeline.at(-1)
+      if (!node || node.state !== 'released' || node.index !== 0) throw new Error('expected the first release')
+      await execute({ projectId: node.projectId, expectedCheckpoint: node.checkpoint })
+      tasks = ctx.agentTeams.listTasks(caller.agent)
+      expect(tasks.map(task => task.status)).toEqual(['completed', 'in_progress'])
+
+      timeline = await ctx.projectDashboard.timeline(new AbortController().signal)
+      node = timeline.at(-1)
+      if (!node || node.state !== 'awaiting-human' || node.index !== 1) throw new Error('expected the second human release node')
+      await ctx.projectDashboard.confirmAcceptance(node.projectId, node.checkpoint, new AbortController().signal)
+      timeline = await ctx.projectDashboard.timeline(new AbortController().signal)
+      node = timeline.at(-1)
+      if (!node || node.state !== 'released' || node.index !== 1) throw new Error('expected the second release')
+      await execute({ projectId: node.projectId, expectedCheckpoint: node.checkpoint })
+      expect(ctx.agentTeams.listTasks(caller.agent).map(task => task.status)).toEqual(['completed', 'completed'])
+      expect((await ctx.projectDashboard.timeline(new AbortController().signal)).at(-1)?.state).toBe('completed')
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('records an unlinked execution when Team mode is off at admission', async () => {
+    const { ctx, store, plan, caller, execute } = await acceptanceFixture('automatic', { team: true, teamEnabled: false })
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const timeline = await ctx.projectDashboard.timeline(new AbortController().signal)
+      const initial = timeline.find(record => record.state === 'started')
+      if (!initial) throw new Error('expected a started checkpoint')
+      expect(initial.teamLink).toBe('disabled')
+      expect(store.teamTasks(brandString<ProjectExecutionId>(initial.projectId))).toEqual([])
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('records an unlinked execution when the Team service is absent', async () => {
+    const { ctx, store, plan, caller, execute } = await acceptanceFixture('automatic')
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const initial = (await ctx.projectDashboard.timeline(new AbortController().signal))
+        .find(record => record.state === 'started')
+      if (!initial) throw new Error('expected a started checkpoint')
+      expect(initial.teamLink).toBe('unavailable')
+      expect(store.teamTasks(brandString<ProjectExecutionId>(initial.projectId))).toEqual([])
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('adopts marker-matched Team tasks instead of creating duplicates after an interrupted admission', async () => {
+    const { ctx, store, plan, caller } = await acceptanceFixture('automatic', { team: true })
+    try {
+      const projectId = brandString<ProjectExecutionId>('adoption-project')
+      const signal = new AbortController().signal
+      await expect(linkProjectTeamTasks(ctx, store, caller.agent, plan, projectId, signal)).resolves.toBe('linked')
+      const first = ctx.agentTeams.listTasks(caller.agent)
+      await expect(linkProjectTeamTasks(ctx, store, caller.agent, plan, projectId, signal)).resolves.toBe('linked')
+      const second = ctx.agentTeams.listTasks(caller.agent)
+      expect(second).toHaveLength(first.length)
+      expect(second.filter(task => task.description.includes(teamTaskMarker(projectId, plan, 0)))).toHaveLength(1)
+      expect(store.teamTasks(projectId)).toHaveLength(2)
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('reuses a durably admitted run when admission stopped before dispatch', async () => {
+    const { ctx, store, plan, caller, execute } = await acceptanceFixture('automatic', { team: true })
+    try {
+      const admitted = brandString<ProjectExecutionId>('admitted-project')
+      store.claimPlanRun(plan.id, plan.revision, admitted)
+      await execute({ planId: plan.id, planRevision: plan.revision })
+      const initial = (await ctx.projectDashboard.timeline(new AbortController().signal))
+        .find(record => record.state === 'started')
+      expect(initial?.projectId).toBe(admitted)
+      expect(store.teamTasks(admitted)).toHaveLength(2)
+      expect(ctx.agentTeams.listTasks(caller.agent).filter(task =>
+        task.description.includes(teamTaskMarker(admitted, plan, 0)))).toHaveLength(1)
+      const duplicate = await execute({ planId: plan.id, planRevision: plan.revision })
+      expect(duplicate.results[0]?.result).toMatchObject({ isError: true, error: { info: { code: 'PROJECT_PLAN_NOT_RUNNABLE' } } })
+      expect(ctx.agentTeams.listTasks(caller.agent)).toHaveLength(2)
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('stops a linked continuation after Team mode is disabled', async () => {
+    const { ctx, store, plan, caller, execute } = await acceptanceFixture('human', { team: true })
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const node = (await ctx.projectDashboard.timeline(new AbortController().signal)).at(-1)
+      if (!node || node.state !== 'awaiting-human') throw new Error('expected a human release node')
+      await ctx.projectDashboard.confirmAcceptance(node.projectId, node.checkpoint, new AbortController().signal)
+      const released = (await ctx.projectDashboard.timeline(new AbortController().signal)).at(-1)
+      if (!released || released.state !== 'released') throw new Error('expected a release checkpoint')
+      await ctx.agentTeams.setEnabled(caller.agent, false)
+      const denied = await execute({ projectId: released.projectId, expectedCheckpoint: released.checkpoint })
+      expect(denied.results[0]?.result).toMatchObject({ isError: true, error: { info: { code: 'PROJECT_TEAM_DISABLED' } } })
+    } finally { store.close(); await caller.dispose() }
   })
 })

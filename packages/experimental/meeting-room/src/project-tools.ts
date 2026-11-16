@@ -4,11 +4,14 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { defineTool, ToolContextUnavailableError, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Config } from './index.ts'
 import type { MeetingStore } from './store.ts'
-import type { EmployeeId, ProjectPlanId, ProjectExecutionId, AcceptanceReport } from './types.ts'
+import type { EmployeeId, ProjectPlanId, ProjectExecutionId, AcceptanceReport, ProjectTeamLinkState } from './types.ts'
 import { reviewTask, verifyAcceptanceArtifacts } from './acceptance.ts'
+import {
+  claimProjectTeamTask, completeProjectTeamTask, linkProjectTeamTasks, syncReleasedProjectTeamTasks, verifyProjectTeamTasks,
+} from './team-link.ts'
 
 /**
  * Register execution and history tools in the meeting product composition.
@@ -68,7 +71,11 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
         || (args.expectedCheckpoint !== undefined && (!Number.isSafeInteger(args.expectedCheckpoint) || args.expectedCheckpoint < 1))) {
         throw new ToolArgsError(['Choose saved plan and revision, inline goal and tasks, or released projectId and expectedCheckpoint.'])
       }
-      const history = args.projectId === undefined ? [] : store.execution(brandString<ProjectExecutionId>(args.projectId))
+      const root = ctx.subagents.rootOf(parent)
+      let projectId = args.projectId === undefined
+        ? brandString<ProjectExecutionId>(randomUUID())
+        : brandString<ProjectExecutionId>(args.projectId)
+      const history = args.projectId === undefined ? [] : store.execution(projectId)
       const latest = history.at(-1)
       const initial = history.find(entry => entry.state === 'started')
       const repairing = latest?.state === 'acceptance-blocked'
@@ -81,8 +88,16 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
       const plan = initial?.planId && initial.planRevision ? store.currentPlan(initial.planId, initial.planRevision, true)
         : args.planId === undefined ? undefined
           : store.currentPlan(brandString<ProjectPlanId>(args.planId), args.planRevision ?? 0, true)
-      if (args.projectId !== undefined && (ctx.subagents.rootOf(parent) !== parent || initial?.sessionId !== parent.session.id)) {
+      if (args.projectId !== undefined && (root !== parent || initial?.sessionId !== parent.session.id)) {
         throw new ToolContextUnavailableError('Continue or repair the execution from its original main conversation.')
+      }
+      let teamLink: ProjectTeamLinkState | undefined
+      if (args.projectId !== undefined) {
+        teamLink = initial?.teamLink
+        if (teamLink === 'linked') {
+          verifyProjectTeamTasks(ctx, store, root, projectId, history)
+          await syncReleasedProjectTeamTasks(ctx, store, root, projectId, history, exec.signal)
+        }
       }
       const repairTask = repairing && latest.index !== undefined ? plan?.tasks[latest.index] : undefined
       const previousAttempts = history.filter(entry => entry.state === 'reworking' && entry.index === latest?.index).length
@@ -109,14 +124,28 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
         }
         return { ...task, ...(employee === undefined ? {} : { employee }) }
       })
-      const projectId = args.projectId === undefined ? brandString<Branded<'ProjectId'>>(randomUUID()) : brandString<ProjectExecutionId>(args.projectId)
       const cwd = initial?.cwd ?? await ctx.workingDirectory.ensure(parent, exec.signal)
       assertOpen()
       exec.signal.throwIfAborted()
+      if (latest === undefined && plan) {
+        if (plan.executionId !== undefined) {
+          if (store.execution(plan.executionId).length > 0) {
+            throw new HarnessError('This plan revision was already started. Inspect its execution before retrying.', 'PROJECT_PLAN_NOT_RUNNABLE')
+          }
+          projectId = plan.executionId
+        } else {
+          store.claimPlanRun(plan.id, plan.revision, projectId)
+        }
+        teamLink = await linkProjectTeamTasks(ctx, store, root, plan, projectId, exec.signal)
+      }
+      const teamNotice = teamLink === 'disabled'
+        ? 'Team mode is off, so this execution is not mirrored to the shared Team task board.'
+        : teamLink === 'unavailable'
+          ? 'The Team service is unavailable, so this execution is not mirrored to the shared Team task board.'
+          : undefined
       const owner = initial?.sessionId ?? parent.session.id
       if (latest && plan) store.transitionExecution(projectId, latest.checkpoint, owner,
         { state: repairing ? 'reworking' : 'resuming', index: latest.index, ...(rework ? { rework } : {}) }, plan)
-      else if (plan) store.claimPlanRun(plan.id, plan.revision, projectId)
       const controller = new AbortController()
       const signal = AbortSignal.any([exec.signal, controller.signal])
       let settle!: () => void
@@ -125,12 +154,13 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
         store.recordProject(owner, JSON.stringify({ projectId,
           ...(rework && 'index' in entry && entry.index === latest?.index ? { rework } : {}), ...entry }))
       }
+      const linkage = { ...(teamLink === undefined ? {} : { teamLink }), ...(teamNotice === undefined ? {} : { teamNotice }) }
       let handoff = history.filter(entry => entry.state === 'task-produced').at(-1)?.handoff ?? ''
       const accepted: AcceptanceReport[] = history.flatMap(entry =>
         (entry.state === 'released' || entry.state === 'acceptance-passed') && entry.report?.passed ? [entry.report] : [])
       try {
         signal.throwIfAborted()
-        if (!latest) record({ state: 'started', goal, tasks, cwd, ...(team === undefined ? {} : { team }),
+        if (!latest) record({ state: 'started', goal, tasks, cwd, ...(team === undefined ? {} : { team }), ...linkage,
           ...(plan === undefined ? {} : { planId: plan.id, planRevision: plan.revision, background: plan.background }) })
         for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
         for (const [index, task] of tasks.entries()) {
@@ -170,6 +200,9 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
           try {
             record({ state: 'running', index, sessionId: activation.childId,
               childSessionId: activation.childId, parentSessionId: parent.session.id })
+            if (teamLink === 'linked') {
+              await claimProjectTeamTask(ctx, store, root, projectId, index, activation.childId, signal)
+            }
             const abort = () => { void activation.dispose().catch(() => { /* Disposal is awaited in finally. */ }) }
             signal.addEventListener('abort', abort, { once: true })
             try {
@@ -194,7 +227,7 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
           if (plan && plannedTask?.review) {
             if (!plannedTask.review.artifactPaths) {
               record({ state: 'awaiting-acceptance', index, review: plannedTask.review })
-              return JSON.stringify({ projectId, state: 'awaiting-acceptance', index, handoff,
+              return JSON.stringify({ projectId, state: 'awaiting-acceptance', index, handoff, ...linkage,
                 message: 'This legacy plan lacks explicit acceptance artifact paths. Save and confirm a revised plan before independent review.' })
             }
             const report = await reviewTask(ctx, config, parent, plan, plannedTask, index, handoff, cwd, signal, record)
@@ -207,15 +240,23 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
                 maxAttempts: plannedTask.review.rework.maxAttempts,
               } : undefined
               record({ state, index, report, ...(repair ? { rework: repair } : {}) })
-              return JSON.stringify({ projectId, state, index, handoff, report, ...(repair ? { rework: repair } : {}) })
+              return JSON.stringify({ projectId, state, index, handoff, report, ...(repair ? { rework: repair } : {}), ...linkage })
             }
             record({ state: 'acceptance-passed', index, report })
+            if (teamLink === 'linked') {
+              await completeProjectTeamTask(ctx, store, root, projectId, index, signal)
+            }
             accepted.push(report)
           }
         }
         const state = plan && plan.tasks.every(task => task.review?.artifactPaths) ? 'completed' : 'awaiting-review'
+        if (state === 'completed' && teamLink === 'linked') {
+          for (let index = 0; index < tasks.length; index++) {
+            await completeProjectTeamTask(ctx, store, root, projectId, index, signal)
+          }
+        }
         record({ state })
-        return JSON.stringify({ projectId, state, handoff })
+        return JSON.stringify({ projectId, state, handoff, ...linkage })
       } catch (error) {
         try {
           record({ state: signal.aborted ? 'interrupted' : 'failed' })
