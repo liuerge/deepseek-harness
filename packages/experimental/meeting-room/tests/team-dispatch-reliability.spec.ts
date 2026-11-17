@@ -46,6 +46,56 @@ function aborted(signal: AbortSignal | undefined): Promise<never> {
 }
 
 describe('team dispatch reliability', () => {
+  it.each(['automatic', 'human'] as const)('rejects a manual completion during independent review (%s)', async (releasePolicy) => {
+    let artifact = ''
+    const fixture = await teamFixture({ review: releasePolicy, script: [
+      workerText('Author handoff'),
+      () => toolCallResponse('review-read', 'read', { file_path: artifact }),
+      () => toolCallResponse('review-pass', 'structured_output', { criteria: [{ id: 'AC-1', status: 'pass',
+        notes: 'Read the artifact.', evidencePaths: [artifact] }] }),
+      workerText('Must not start downstream'),
+    ] })
+    const { ctx, store, plan, caller, execute } = fixture
+    artifact = fixture.artifact
+    const entered = deferred()
+    const release = deferred()
+    const original = ctx.tools.execute.bind(ctx.tools)
+    vi.spyOn(ctx.tools, 'execute').mockImplementation(async (input) => {
+      if (input.calls.some(call => call.name === 'structured_output')) {
+        entered.resolve()
+        await Promise.race([release.promise, aborted(input.signal)])
+      }
+      return original(input)
+    })
+    let running: ReturnType<typeof execute> | undefined
+    try {
+      running = execute({ planId: plan.id, planRevision: 1 })
+      await entered.promise
+      const task = ctx.agentTeams.listTasks(caller.agent)[0]
+      if (!task) throw new Error('Expected the claimed Team task')
+      expect(task.status).toBe('in_progress')
+      const completed = await ctx.agentTeams.updateTask(caller.agent, {
+        taskId: task.id, expectedRevision: task.revision, action: 'complete',
+      })
+      expect(completed.ownerId).toBe(task.ownerId)
+      release.resolve()
+      let result = await running
+      if (releasePolicy === 'human') {
+        const waiting = await latest(ctx)
+        expect(waiting.state).toBe('awaiting-human')
+        await ctx.projectDashboard.confirmAcceptance(waiting.projectId, waiting.checkpoint, new AbortController().signal)
+        const released = await latest(ctx)
+        result = await execute({ projectId: released.projectId, expectedCheckpoint: released.checkpoint })
+      }
+      expect(result.results[0]?.result).toMatchObject({ isError: true,
+        error: { info: { code: 'PROJECT_TEAM_TASK_CONFLICT' } } })
+      const records = await ctx.projectDashboard.timeline(new AbortController().signal)
+      expect(records.some(record => record.index === 1)).toBe(false)
+      expect(fixture.adapter.requests).toHaveLength(3)
+      expect(ctx.agentTeams.getTask(caller.agent, task.id)).toEqual(completed)
+    } finally { release.resolve(); await running; store.close(); await caller.dispose() }
+  })
+
   it('rejects a manually reassigned node instead of reclaiming it for the project', async () => {
     let artifact = ''
     const script: TeamScript = [
@@ -526,7 +576,10 @@ describe('team dispatch reliability', () => {
     }
   })
 
-  it('absorbs marker tasks after a partial association failure instead of creating duplicates', async () => {
+  it.each([
+    { edited: false, missingLink: false }, { edited: true, missingLink: false },
+    { edited: false, missingLink: true }, { edited: true, missingLink: true },
+  ])('checks partial associations before retrying (edited=$edited, missingLink=$missingLink)', async ({ edited, missingLink }) => {
     let artifact = ''
     const script: TeamScript = [
       workerText('First delivery'),
@@ -540,11 +593,15 @@ describe('team dispatch reliability', () => {
     const { ctx, store, plan, caller, execute } = fixture
     const original = ctx.agentTeams.createTask.bind(ctx.agentTeams)
     let calls = 0
-    vi.spyOn(ctx.agentTeams, 'createTask').mockImplementation(async (member, request, signal) => {
-      calls += 1
-      if (calls === 2) throw new Error('synthetic association failure')
-      return original(member, request, signal)
-    })
+    if (missingLink) {
+      vi.spyOn(MeetingStore.prototype, 'saveTeamTask').mockImplementationOnce(() => { throw new Error('synthetic link save failure') })
+    } else {
+      vi.spyOn(ctx.agentTeams, 'createTask').mockImplementation(async (member, request, signal) => {
+        calls += 1
+        if (calls === 2) throw new Error('synthetic association failure')
+        return original(member, request, signal)
+      })
+    }
     try {
       const failed = await execute({ planId: plan.id, planRevision: plan.revision })
       expect(failed.results[0]?.result.isError).toBe(true)
@@ -553,7 +610,24 @@ describe('team dispatch reliability', () => {
       expect(store.execution(reserved)).toEqual([])
       expect(ctx.agentTeams.listTasks(caller.agent)).toHaveLength(1)
 
+      const savedLinks = store.teamTasks(reserved)
+      if (edited) {
+        const task = ctx.agentTeams.listTasks(caller.agent)[0]
+        if (!task) throw new Error('Expected the partial association')
+        await ctx.agentTeams.updateTask(caller.agent, { taskId: task.id, expectedRevision: task.revision,
+          action: 'edit', description: `${task.description}\nUser changed this task before retry` })
+      }
+
       const retried = await execute({ planId: plan.id, planRevision: plan.revision })
+      if (edited) {
+        expect(retried.results[0]?.result).toMatchObject({ isError: true,
+          error: { info: { code: 'PROJECT_TEAM_TASK_CONFLICT' } } })
+        expect(store.teamTasks(reserved)).toEqual(savedLinks)
+        expect(store.execution(reserved)).toEqual([])
+        expect(ctx.agentTeams.listTasks(caller.agent)).toHaveLength(1)
+        expect(fixture.adapter.requests).toHaveLength(0)
+        return
+      }
       expect(retried.results[0]?.result.isError).not.toBe(true)
       const tasks = ctx.agentTeams.listTasks(caller.agent)
       expect(tasks).toHaveLength(2)

@@ -135,6 +135,7 @@ export async function linkProjectTeamTasks(ctx: Context, store: MeetingStore, ro
     }
   }
   const known = service.listTasks(root)
+  const retained = store.teamTasks(projectId)
   const ids: TeamTaskId[] = []
   for (const [index, task] of plan.tasks.entries()) {
     const marker = teamTaskMarker(projectId, plan, index)
@@ -144,6 +145,29 @@ export async function linkProjectTeamTasks(ctx: Context, store: MeetingStore, ro
         'PROJECT_TEAM_TASK_DUPLICATE')
     }
     let linked = matches[0]
+    const saved = retained.find(link => link.index === index)
+    if (saved !== undefined) {
+      linked = service.getTask(root, brandString<TeamTaskId>(saved.taskId))
+      if (linked.status === 'deleted') {
+        throw new HarnessError(`Team task ${linked.id} was deleted. Inspect the board before retrying.`, 'PROJECT_TEAM_TASK_DELETED')
+      }
+      if (linked.status === 'completed') {
+        throw new HarnessError(`Team task ${linked.id} was completed before project release. Inspect the board before retrying.`,
+          'PROJECT_TEAM_TASK_COMPLETED')
+      }
+      assertProjectContent(saved, linked)
+      assertUnchanged(saved, linked)
+    } else if (linked !== undefined) {
+      // Team creation starts at revision one; edits and assignments advance that revision.
+      const initial: ProjectTeamTaskLink = { projectId, index, planId: plan.id, planRevision: plan.revision,
+        taskId: brandString<ProjectTeamTaskId>(linked.id), revision: 1, status: 'pending' }
+      assertUnchanged(initial, linked)
+      if (linked.ownerId !== undefined) throw conflict(initial, linked, 'owner')
+      if (linked.subject !== `${index + 1}/${plan.tasks.length} ${task.role}`.slice(0, TASK_TEXT.subject).trim()
+        || linked.description !== taskDescription(plan, task, index, projectId).trim()) {
+        throw conflict(initial, linked, 'content')
+      }
+    }
     if (!linked) {
       const previous = ids[index - 1]
       linked = await createAdopting(service, root, {
@@ -276,10 +300,8 @@ export async function completeProjectTeamTask(ctx: Context, store: MeetingStore,
   }
   assertProjectContent(link, current)
   if (current.status === 'completed') {
-    if (expectedOwner !== undefined && current.ownerId !== expectedOwner) throw conflict(link, current, 'owner')
-    const ownUnsavedCompletion = link.status === 'in_progress' && current.revision === link.revision + 1
-    if (current.revision !== link.revision && !ownUnsavedCompletion) throw conflict(link, current, 'revision')
-    store.saveTeamTask(association(current, link))
+    assertUnchanged(link, current)
+    if (expectedOwner === undefined || current.ownerId !== expectedOwner) throw conflict(link, current, 'owner')
     return
   }
   assertUnchanged(link, current)
@@ -330,6 +352,9 @@ export function verifyProjectTeamTasks(ctx: Context, store: MeetingStore, root: 
         throw new HarnessError(`Team task ${current.id} was completed before project acceptance released the node. Inspect the acceptance records.`,
           'PROJECT_TEAM_TASK_AHEAD')
       }
+      assertUnchanged(link, current)
+      const worker = workers.get(link.index)
+      if (worker === undefined || current.ownerId !== worker) throw conflict(link, current, 'owner')
       continue
     }
     if (!released.has(link.index)) {
