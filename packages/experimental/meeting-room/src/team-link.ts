@@ -27,6 +27,42 @@ export function teamTaskMarker(projectId: ProjectExecutionId, plan: Pick<Project
   return `[dsh-project-task:${digest}]`
 }
 
+/** One externally visible difference between the stored association and the current Team task. */
+interface TeamTaskChange {
+  /** Execution identity shared by project checkpoints. */
+  projectId: ProjectExecutionId
+  /** Zero-based task position in the confirmed plan. */
+  index: number
+  /** Team task identity. */
+  taskId: string
+  /** Kind of difference that requires inspection. */
+  reason: 'content' | 'revision' | 'owner' | 'released'
+  /** Revision recorded by the project after its last authorized operation. */
+  expectedRevision: number
+  /** Current Team task revision. */
+  revision: number
+  /** Status recorded by the project after its last authorized operation. */
+  expectedStatus: ProjectTeamTaskLink['status']
+  /** Current Team task status. */
+  status: TeamTaskView['status']
+  /** Current owner Session, or `null` when unowned. */
+  ownerId: string | null
+}
+
+/**
+ * Structured conflict for a Team task the project did not change itself.
+ * The serialized detail travels in the message so tool results and logs remain
+ * inspectable without a second board read.
+ */
+export class ProjectTeamTaskConflict extends HarnessError {
+  /** @param change - Exact stored-versus-observed difference. */
+  constructor(readonly change: TeamTaskChange) {
+    super(`Project task ${change.index + 1} Team task ${change.taskId} changed outside this project (${change.reason}). `
+      + `Inspect the shared board and project checkpoints before continuing. Details: ${JSON.stringify(change)}`,
+    'PROJECT_TEAM_TASK_CONFLICT')
+  }
+}
+
 /** Read the Team service, failing when a linked execution can no longer synchronize. */
 function requireService(ctx: Context): TeamService {
   const service = ctx.get('agentTeams')
@@ -55,6 +91,24 @@ function errorCode(error: unknown): string | undefined {
 /** Project one Team task view onto the stored association. */
 function association(task: TeamTaskView, link: Pick<ProjectTeamTaskLink, 'projectId' | 'index' | 'planId' | 'planRevision'>): ProjectTeamTaskLink {
   return { ...link, taskId: brandString<ProjectTeamTaskId>(task.id), revision: task.revision, status: task.status }
+}
+
+/** Reject a task whose project marker was removed or rewritten. */
+function assertProjectContent(link: ProjectTeamTaskLink, task: TeamTaskView): void {
+  const marker = teamTaskMarker(link.projectId, { id: link.planId, revision: link.planRevision }, link.index)
+  if (!task.description.includes(marker)) throw conflict(link, task, 'content')
+}
+
+/** Build one structured conflict from the stored association and current board value. */
+function conflict(link: ProjectTeamTaskLink, task: TeamTaskView, reason: TeamTaskChange['reason']): ProjectTeamTaskConflict {
+  return new ProjectTeamTaskConflict({ projectId: link.projectId, index: link.index, taskId: link.taskId,
+    reason, expectedRevision: link.revision, revision: task.revision, expectedStatus: link.status,
+    status: task.status, ownerId: task.ownerId ?? null })
+}
+
+/** Refuse a task whose revision or status differs from the project's last authorized operation. */
+function assertUnchanged(link: ProjectTeamTaskLink, task: TeamTaskView): void {
+  if (task.revision !== link.revision || task.status !== link.status) throw conflict(link, task, 'revision')
 }
 
 /**
@@ -129,6 +183,9 @@ async function createAdopting(service: TeamService, root: Agent, request: Parame
 
 /**
  * Give the dispatched worker Session ownership of its Task before it runs.
+ * A task still owned by this execution's previous worker is a confirmed rework
+ * handoff. Any other owner, revision, release, or content change is returned as a
+ * structured conflict instead of being overwritten.
  * @param ctx - Context carrying the Team service and live Agent registry.
  * @param store - Project association owner.
  * @param root - Live main conversation that owns the board.
@@ -136,9 +193,10 @@ async function createAdopting(service: TeamService, root: Agent, request: Parame
  * @param index - Zero-based task position.
  * @param childId - Worker Session dispatched for this task.
  * @param signal - Cancellation checked by each Team mutation.
+ * @param previousOwner - Worker Session that produced this task in the retained history, when reworking.
  */
 export async function claimProjectTeamTask(ctx: Context, store: MeetingStore, root: Agent, projectId: ProjectExecutionId,
-  index: number, childId: SessionId, signal: AbortSignal): Promise<void> {
+  index: number, childId: SessionId, signal: AbortSignal, previousOwner?: SessionId): Promise<void> {
   const service = requireService(ctx)
   if (!teamEnabled(service, root)) {
     throw new HarnessError('Team mode was disabled during the project execution. Re-enable Agent Teams and inspect the board before continuing.',
@@ -159,8 +217,13 @@ export async function claimProjectTeamTask(ctx: Context, store: MeetingStore, ro
     throw new HarnessError(`Team task ${current.id} was completed before the project released this node. Inspect the board and acceptance records.`,
       'PROJECT_TEAM_TASK_COMPLETED')
   }
+  assertProjectContent(link, current)
+  if (current.status === 'in_progress' && link.status === 'pending') throw conflict(link, current, 'owner')
+  assertUnchanged(link, current)
   if (current.status === 'in_progress' && current.ownerId !== childId) {
+    if (previousOwner === undefined || current.ownerId !== previousOwner) throw conflict(link, current, 'owner')
     current = await service.updateTask(root, { taskId, expectedRevision: current.revision, action: 'release' }, signal)
+    store.saveTeamTask(association(current, link))
   }
   if (current.status === 'pending') {
     if (!current.ready) {
@@ -183,17 +246,18 @@ export async function claimProjectTeamTask(ctx: Context, store: MeetingStore, ro
 
 /**
  * Complete the associated Team task after the project released its node.
- * A pending association is claimed by the Lead first so the project's released
- * record remains authoritative during recovery.
+ * Only the worker that produced the released node may be completed, and only
+ * from the revision and status recorded after its claim.
  * @param ctx - Context carrying the Team service.
  * @param store - Project association owner.
  * @param root - Live main conversation that owns the board.
  * @param projectId - Execution identity.
  * @param index - Zero-based task position.
+ * @param expectedOwner - Worker Session that produced the released node.
  * @param signal - Cancellation checked by each Team mutation.
  */
 export async function completeProjectTeamTask(ctx: Context, store: MeetingStore, root: Agent, projectId: ProjectExecutionId,
-  index: number, signal: AbortSignal): Promise<void> {
+  index: number, expectedOwner: SessionId | undefined, signal: AbortSignal): Promise<void> {
   const service = requireService(ctx)
   if (!teamEnabled(service, root)) {
     throw new HarnessError('Team mode was disabled during the project execution. Re-enable Agent Teams and inspect the board before continuing.',
@@ -205,23 +269,35 @@ export async function completeProjectTeamTask(ctx: Context, store: MeetingStore,
       'PROJECT_TEAM_TASK_MISSING')
   }
   const taskId = brandString<TeamTaskId>(link.taskId)
-  let current = service.getTask(root, taskId)
+  const current = service.getTask(root, taskId)
   if (current.status === 'deleted') {
     throw new HarnessError(`Team task ${current.id} was deleted. Restore the board entry or revise the confirmed plan before continuing.`,
       'PROJECT_TEAM_TASK_DELETED')
   }
+  assertProjectContent(link, current)
   if (current.status === 'completed') {
+    if (expectedOwner !== undefined && current.ownerId !== expectedOwner) throw conflict(link, current, 'owner')
+    const ownUnsavedCompletion = link.status === 'in_progress' && current.revision === link.revision + 1
+    if (current.revision !== link.revision && !ownUnsavedCompletion) throw conflict(link, current, 'revision')
     store.saveTeamTask(association(current, link))
     return
   }
-  if (current.status === 'pending') {
-    current = await service.updateTask(root, { taskId, expectedRevision: current.revision, action: 'claim' }, signal)
-  }
-  if (current.status !== 'in_progress') {
-    throw new HarnessError(`Team task ${current.id} is not in progress. Inspect the board before continuing.`, 'PROJECT_TEAM_TASK_STATE')
-  }
+  assertUnchanged(link, current)
+  if (current.status === 'pending') throw conflict(link, current, 'released')
+  if (expectedOwner === undefined || current.ownerId !== expectedOwner) throw conflict(link, current, 'owner')
   const completed = await service.updateTask(root, { taskId, expectedRevision: current.revision, action: 'complete' }, signal)
   store.saveTeamTask(association(completed, link))
+}
+
+/** Index the worker Session that produced each retained task. */
+function producedWorkers(history: readonly ExecutionCheckpoint[]): Map<number, SessionId> {
+  const workers = new Map<number, SessionId>()
+  for (const entry of history) {
+    if (entry.index !== undefined && entry.state === 'task-produced' && entry.childSessionId !== undefined) {
+      workers.set(entry.index, brandString<SessionId>(entry.childSessionId))
+    }
+  }
+  return workers
 }
 
 /**
@@ -241,16 +317,29 @@ export function verifyProjectTeamTasks(ctx: Context, store: MeetingStore, root: 
   }
   const released = new Set(history.flatMap(entry => entry.index !== undefined && entry.report?.passed === true
     && (entry.state === 'released' || entry.state === 'acceptance-passed') ? [entry.index] : []))
+  const workers = producedWorkers(history)
   for (const link of store.teamTasks(projectId)) {
     const current = service.getTask(root, brandString<TeamTaskId>(link.taskId))
     if (current.status === 'deleted') {
       throw new HarnessError(`Team task ${current.id} was deleted. Restore the board entry or revise the confirmed plan before continuing.`,
         'PROJECT_TEAM_TASK_DELETED')
     }
-    if (current.status === 'completed' && !released.has(link.index)) {
-      throw new HarnessError(`Team task ${current.id} was completed before project acceptance released the node. Inspect the acceptance records.`,
-        'PROJECT_TEAM_TASK_AHEAD')
+    assertProjectContent(link, current)
+    if (current.status === 'completed') {
+      if (!released.has(link.index)) {
+        throw new HarnessError(`Team task ${current.id} was completed before project acceptance released the node. Inspect the acceptance records.`,
+          'PROJECT_TEAM_TASK_AHEAD')
+      }
+      continue
     }
+    if (!released.has(link.index)) {
+      assertUnchanged(link, current)
+      continue
+    }
+    if (current.status !== 'in_progress') throw conflict(link, current, 'released')
+    const worker = workers.get(link.index)
+    if (worker !== undefined && current.ownerId !== worker) throw conflict(link, current, 'owner')
+    assertUnchanged(link, current)
   }
 }
 
@@ -270,5 +359,106 @@ export async function syncReleasedProjectTeamTasks(ctx: Context, store: MeetingS
     if (entry.index === undefined || entry.report?.passed !== true) continue
     if (entry.state === 'released' || entry.state === 'acceptance-passed') released.add(entry.index)
   }
-  for (const index of released) await completeProjectTeamTask(ctx, store, root, projectId, index, signal)
+  const workers = producedWorkers(history)
+  for (const index of released) await completeProjectTeamTask(ctx, store, root, projectId, index, workers.get(index), signal)
+}
+
+/** One gate holding a worker's first model step until its Team claim settles. */
+export interface TeamClaimGate {
+  /** Allow the gated worker's first step to proceed. */
+  release(): void
+  /** Reject every current and later wait with this failure while the entry remains installed. */
+  fail(error: unknown): void
+  /** Reject any pending wait and remove the entry after the worker is disposed. */
+  close(): void
+}
+
+/** Convert one abort reason into a rejection the gate can safely propagate. */
+function cancelled(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason
+    : new HarnessError('The Team claim gate was cancelled before its worker could start.', 'PROJECT_TEAM_GATE_CANCELLED')
+}
+
+/** Deferred step gate with cancellation-aware waits. */
+class DeferredClaimGate {
+  private settled: 'pending' | 'released' | 'failed' = 'pending'
+  private failure: unknown
+  private readonly ready: Promise<void>
+  private readonly acceptable: () => void
+  private readonly rejectable: (error: unknown) => void
+
+  constructor() {
+    let accept!: () => void
+    let reject!: (error: unknown) => void
+    this.ready = new Promise<void>((resolve, decline) => { accept = resolve; reject = decline })
+    this.acceptable = accept
+    this.rejectable = reject
+    void this.ready.catch(() => { /* Consumed by wait() or the gate's closing path. */ })
+  }
+
+  release(): void {
+    if (this.settled !== 'pending') return
+    this.settled = 'released'
+    this.acceptable()
+  }
+
+  fail(error: unknown): void {
+    if (this.settled !== 'pending') return
+    this.settled = 'failed'
+    this.failure = error
+    this.rejectable(error)
+  }
+
+  async wait(signal: AbortSignal): Promise<void> {
+    if (this.settled === 'released') return
+    if (this.settled === 'failed') throw this.failure
+    signal.throwIfAborted()
+    await new Promise<void>((resolve, reject) => {
+      const abort = (): void => { reject(cancelled(signal)) }
+      signal.addEventListener('abort', abort, { once: true })
+      this.ready.then(() => {
+        signal.removeEventListener('abort', abort)
+        resolve()
+      }, (error: unknown) => {
+        signal.removeEventListener('abort', abort)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      })
+    })
+  }
+}
+
+/**
+ * Install the agent-scoped step gate used by team-linked project workers.
+ * The gate matches the exact reserved worker Session id, so unrelated children
+ * never wait on a project claim.
+ * @param ctx - Context that dispatches agent events and owns the registrations.
+ * @returns Opener for one worker Session gate.
+ */
+export function registerTeamClaimGates(ctx: Context): (childId: SessionId) => TeamClaimGate {
+  const gates = new Map<SessionId, DeferredClaimGate>()
+  ctx.effect(() => {
+    const off = ctx.on('agent/pre-step', async (payload, next) => {
+      const gate = gates.get(payload.agent.session.id)
+      if (gate === undefined) return next()
+      await gate.wait(payload.signal)
+      return next()
+    })
+    return () => {
+      off()
+      for (const gate of gates.values()) {
+        gate.fail(new HarnessError('Project execution is closing before its Team claim settled.', 'PROJECT_TEAM_GATE_CLOSED'))
+      }
+      gates.clear()
+    }
+  })
+  return (childId) => {
+    if (gates.has(childId)) throw new HarnessError('A Team claim gate already exists for this worker Session.', 'PROJECT_TEAM_GATE_DUPLICATE')
+    const deferred = new DeferredClaimGate()
+    gates.set(childId, deferred)
+    return {
+      release: () => { deferred.release(); gates.delete(childId) },
+      fail: (error) => { deferred.fail(error) },
+      close: () => { deferred.fail(new HarnessError('Project execution closed before its Team claim settled.', 'PROJECT_TEAM_GATE_CLOSED')); gates.delete(childId) },
+    }
+  }
 }

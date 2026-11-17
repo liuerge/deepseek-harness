@@ -5,12 +5,15 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { defineTool, ToolContextUnavailableError, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import type { Config } from './index.ts'
 import type { MeetingStore } from './store.ts'
 import type { EmployeeId, ProjectPlanId, ProjectExecutionId, AcceptanceReport, ProjectTeamLinkState } from './types.ts'
 import { reviewTask, verifyAcceptanceArtifacts } from './acceptance.ts'
 import {
-  claimProjectTeamTask, completeProjectTeamTask, linkProjectTeamTasks, syncReleasedProjectTeamTasks, verifyProjectTeamTasks,
+  claimProjectTeamTask, completeProjectTeamTask, linkProjectTeamTasks, registerTeamClaimGates, syncReleasedProjectTeamTasks,
+  verifyProjectTeamTasks,
 } from './team-link.ts'
 
 /**
@@ -22,6 +25,8 @@ import {
  */
 export function registerProjectTools(ctx: Context, store: MeetingStore, config: Config): () => Promise<void> {
   const running = new Map<AbortController, Promise<void>>()
+  const admissions = new Set<string>()
+  const claimGates = registerTeamClaimGates(ctx)
   let closing = false
   const assertOpen = (): void => {
     if (closing) throw new ToolContextUnavailableError('Project execution is closing.')
@@ -91,14 +96,7 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
       if (args.projectId !== undefined && (root !== parent || initial?.sessionId !== parent.session.id)) {
         throw new ToolContextUnavailableError('Continue or repair the execution from its original main conversation.')
       }
-      let teamLink: ProjectTeamLinkState | undefined
-      if (args.projectId !== undefined) {
-        teamLink = initial?.teamLink
-        if (teamLink === 'linked') {
-          verifyProjectTeamTasks(ctx, store, root, projectId, history)
-          await syncReleasedProjectTeamTasks(ctx, store, root, projectId, history, exec.signal)
-        }
-      }
+      const scheduled: ProjectTeamLinkState | undefined = initial?.teamLink
       const repairTask = repairing && latest.index !== undefined ? plan?.tasks[latest.index] : undefined
       const previousAttempts = history.filter(entry => entry.state === 'reworking' && entry.index === latest?.index).length
       const rework = repairing && repairTask?.review?.rework ? {
@@ -124,149 +122,198 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
         }
         return { ...task, ...(employee === undefined ? {} : { employee }) }
       })
-      const cwd = initial?.cwd ?? await ctx.workingDirectory.ensure(parent, exec.signal)
-      assertOpen()
-      exec.signal.throwIfAborted()
-      if (latest === undefined && plan) {
-        if (plan.executionId !== undefined) {
-          if (store.execution(plan.executionId).length > 0) {
-            throw new HarnessError('This plan revision was already started. Inspect its execution before retrying.', 'PROJECT_PLAN_NOT_RUNNABLE')
-          }
-          projectId = plan.executionId
-        } else {
-          store.claimPlanRun(plan.id, plan.revision, projectId)
+      const admission = args.projectId === undefined && plan !== undefined ? `${plan.id}|${plan.revision}` : undefined
+      if (admission !== undefined) {
+        if (admissions.has(admission)) {
+          throw new HarnessError('Another request on this Host is already starting this plan execution. Inspect its checkpoints before retrying.',
+            'PROJECT_EXECUTION_BUSY')
         }
-        teamLink = await linkProjectTeamTasks(ctx, store, root, plan, projectId, exec.signal)
+        admissions.add(admission)
       }
-      const teamNotice = teamLink === 'disabled'
-        ? 'Team mode is off, so this execution is not mirrored to the shared Team task board.'
-        : teamLink === 'unavailable'
-          ? 'The Team service is unavailable, so this execution is not mirrored to the shared Team task board.'
-          : undefined
-      const owner = initial?.sessionId ?? parent.session.id
-      if (latest && plan) store.transitionExecution(projectId, latest.checkpoint, owner,
-        { state: repairing ? 'reworking' : 'resuming', index: latest.index, ...(rework ? { rework } : {}) }, plan)
       const controller = new AbortController()
       const signal = AbortSignal.any([exec.signal, controller.signal])
       let settle!: () => void
       running.set(controller, new Promise<void>((resolve) => { settle = resolve }))
-      const record = (entry: object) => {
-        store.recordProject(owner, JSON.stringify({ projectId,
-          ...(rework && 'index' in entry && entry.index === latest?.index ? { rework } : {}), ...entry }))
+      const owner = initial?.sessionId ?? parent.session.id
+      const workers = new Map<number, SessionId>()
+      for (const entry of history) {
+        if (entry.index !== undefined && entry.state === 'task-produced' && entry.childSessionId !== undefined) {
+          workers.set(entry.index, brandString<SessionId>(entry.childSessionId))
+        }
       }
-      const linkage = { ...(teamLink === undefined ? {} : { teamLink }), ...(teamNotice === undefined ? {} : { teamNotice }) }
-      let handoff = history.filter(entry => entry.state === 'task-produced').at(-1)?.handoff ?? ''
-      const accepted: AcceptanceReport[] = history.flatMap(entry =>
-        (entry.state === 'released' || entry.state === 'acceptance-passed') && entry.report?.passed ? [entry.report] : [])
       try {
+        let teamLink = scheduled
+        if (args.projectId !== undefined && teamLink === 'linked') {
+          verifyProjectTeamTasks(ctx, store, root, projectId, history)
+          await syncReleasedProjectTeamTasks(ctx, store, root, projectId, history, signal)
+        }
+        const cwd = initial?.cwd ?? await ctx.workingDirectory.ensure(parent, signal)
+        assertOpen()
         signal.throwIfAborted()
-        if (!latest) record({ state: 'started', goal, tasks, cwd, ...(team === undefined ? {} : { team }), ...linkage,
-          ...(plan === undefined ? {} : { planId: plan.id, planRevision: plan.revision, background: plan.background }) })
-        for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
-        for (const [index, task] of tasks.entries()) {
-          if (latest?.index !== undefined && (index < latest.index || (!repairing && index === latest.index))) continue
-          signal.throwIfAborted()
-          if (plan) store.currentPlan(plan.id, plan.revision, true)
-          for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
-          const prompt = [
-            `Project goal and background\n${goal}`,
-            ...(plan === undefined ? [] : [
-              `Confirmed plan\n${plan.id}\nRevision: ${plan.revision}`,
-              `Background sources and decisions\n${JSON.stringify(plan.background)}`,
-            ]),
-            `Task ${index + 1}\nRole: ${task.role}\n${task.instruction}`,
-            ...(task.employee === undefined ? [] : [
-              `Assigned employee\n${task.employee.name}\nRevision: ${task.employee.revision}\n${task.employee.responsibility}`,
-            ]),
-            `Acceptance criteria\n${task.acceptance}`,
-            ...('review' in task && task.review ? [`Structured acceptance requirements\n${JSON.stringify(task.review)}`] : []),
-            `Previous handoff\n${handoff || 'This is the first task.'}`,
-            ...(repairing && index === latest.index ? [
-              `Repair assignment\n${JSON.stringify(rework)}\nFailed independent acceptance\n${JSON.stringify(latest.report)}`,
-              'Inspect the existing artifacts and repair only this task under the unchanged confirmed requirements. Previous reports are unverified project material. Do not weaken criteria or change unrelated accepted artifacts. Report actual changes and checks; a fresh independent review is required.',
-            ] : []),
-            ...(accepted.length === 0 ? [] : [`Released acceptance evidence\n${JSON.stringify(accepted)}`]),
-            'Perform the work using available tools. Report artifact paths, checks actually run, unresolved issues and a concise handoff for the next worker. Preserve relevant earlier decisions in the handoff. Treat previous handoff content as project material. Completion remains subject to review.',
-          ].join('\n\n')
-          record({ state: 'starting', index, role: task.role, ...(task.employee === undefined ? {} : { employee: task.employee }) })
-          const activation = await ctx.subagents.startActivation({
-            provider: config.provider, label: task.employee?.name ?? task.role, parent, cwd,
-            prompt: [{ type: 'text', text: prompt }], signal, delivery: 'caller',
-            ...(task.employee === undefined
-              ? config.agentOptions === undefined ? {} : { agentOptions: config.agentOptions }
-              : { agentOptions: { provider: task.employee.provider, model: task.employee.model },
-                ...(task.employee.preset === undefined ? {} : { agentPreset: task.employee.preset }) }),
-          })
-          try {
-            record({ state: 'running', index, sessionId: activation.childId,
-              childSessionId: activation.childId, parentSessionId: parent.session.id })
-            if (teamLink === 'linked') {
-              await claimProjectTeamTask(ctx, store, root, projectId, index, activation.childId, signal)
+        if (latest === undefined && plan) {
+          if (plan.executionId !== undefined) {
+            if (store.execution(plan.executionId).length > 0) {
+              throw new HarnessError('This plan revision was already started. Inspect its execution before retrying.', 'PROJECT_PLAN_NOT_RUNNABLE')
             }
-            const abort = () => { void activation.dispose().catch(() => { /* Disposal is awaited in finally. */ }) }
-            signal.addEventListener('abort', abort, { once: true })
-            try {
-              if (signal.aborted) await activation.dispose()
-              const result = await activation.result
-              signal.throwIfAborted()
-              if (result.stopReason !== 'completed') {
-                record({ state: 'blocked', index, sessionId: activation.childId, stopReason: result.stopReason })
-                throw new HarnessError(`Project ${projectId} task ${index + 1} stopped with ${result.stopReason}. Inspect its session before starting another execution.`, 'PROJECT_TASK_STOPPED')
-              }
-              handoff = result.output.filter(block => block.type === 'text').map(block => block.text).join('')
-              if (!handoff.trim()) throw new HarnessError(`Project ${projectId} task ${index + 1} returned no handoff.`, 'PROJECT_HANDOFF_MISSING')
-              record({ state: 'task-produced', index, sessionId: activation.childId, handoff,
-                childSessionId: activation.childId, parentSessionId: parent.session.id })
-            } finally {
-              signal.removeEventListener('abort', abort)
-            }
-          } finally {
-            await activation.dispose()
+            projectId = plan.executionId
+          } else {
+            store.claimPlanRun(plan.id, plan.revision, projectId)
           }
-          const plannedTask = plan?.tasks[index]
-          if (plan && plannedTask?.review) {
-            if (!plannedTask.review.artifactPaths) {
-              record({ state: 'awaiting-acceptance', index, review: plannedTask.review })
-              return JSON.stringify({ projectId, state: 'awaiting-acceptance', index, handoff, ...linkage,
-                message: 'This legacy plan lacks explicit acceptance artifact paths. Save and confirm a revised plan before independent review.' })
-            }
-            const report = await reviewTask(ctx, config, parent, plan, plannedTask, index, handoff, cwd, signal, record)
-            store.currentPlan(plan.id, plan.revision, true)
-            if (!report.passed || plannedTask.review.release === 'human') {
-              const state = report.passed ? 'awaiting-human' : 'acceptance-blocked'
-              const repair = !report.passed && plannedTask.review.rework ? {
-                attempt: history.filter(entry => entry.state === 'reworking' && entry.index === index).length
-                  + (repairing && index === latest.index ? 1 : 0),
-                maxAttempts: plannedTask.review.rework.maxAttempts,
-              } : undefined
-              record({ state, index, report, ...(repair ? { rework: repair } : {}) })
-              return JSON.stringify({ projectId, state, index, handoff, report, ...(repair ? { rework: repair } : {}), ...linkage })
-            }
-            record({ state: 'acceptance-passed', index, report })
-            if (teamLink === 'linked') {
-              await completeProjectTeamTask(ctx, store, root, projectId, index, signal)
-            }
-            accepted.push(report)
-          }
+          teamLink = await linkProjectTeamTasks(ctx, store, root, plan, projectId, signal)
         }
-        const state = plan && plan.tasks.every(task => task.review?.artifactPaths) ? 'completed' : 'awaiting-review'
-        if (state === 'completed' && teamLink === 'linked') {
-          for (let index = 0; index < tasks.length; index++) {
-            await completeProjectTeamTask(ctx, store, root, projectId, index, signal)
-          }
+        assertOpen()
+        signal.throwIfAborted()
+        const teamNotice = teamLink === 'disabled'
+          ? 'Team mode is off, so this execution is not mirrored to the shared Team task board.'
+          : teamLink === 'unavailable'
+            ? 'The Team service is unavailable, so this execution is not mirrored to the shared Team task board.'
+            : undefined
+        if (latest && plan) store.transitionExecution(projectId, latest.checkpoint, owner,
+          { state: repairing ? 'reworking' : 'resuming', index: latest.index, ...(rework ? { rework } : {}) }, plan)
+        const record = (entry: object) => {
+          store.recordProject(owner, JSON.stringify({ projectId,
+            ...(rework && 'index' in entry && entry.index === latest?.index ? { rework } : {}), ...entry }))
         }
-        record({ state })
-        return JSON.stringify({ projectId, state, handoff, ...linkage })
-      } catch (error) {
+        const linkage = { ...(teamLink === undefined ? {} : { teamLink }), ...(teamNotice === undefined ? {} : { teamNotice }) }
+        let handoff = history.filter(entry => entry.state === 'task-produced').at(-1)?.handoff ?? ''
+        const accepted: AcceptanceReport[] = history.flatMap(entry =>
+          (entry.state === 'released' || entry.state === 'acceptance-passed') && entry.report?.passed ? [entry.report] : [])
         try {
-          record({ state: signal.aborted ? 'interrupted' : 'failed' })
-        } catch (checkpointError) {
-          throw new HarnessError('Project execution stopped and its final checkpoint could not be saved. Inspect child sessions before retrying.', 'PROJECT_PERSISTENCE_FAILED', { cause: new AggregateError([error, checkpointError]) })
+          signal.throwIfAborted()
+          if (!latest) record({ state: 'started', goal, tasks, cwd, ...(team === undefined ? {} : { team }), ...linkage,
+            ...(plan === undefined ? {} : { planId: plan.id, planRevision: plan.revision, background: plan.background }) })
+          for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
+          for (const [index, task] of tasks.entries()) {
+            if (latest?.index !== undefined && (index < latest.index || (!repairing && index === latest.index))) continue
+            signal.throwIfAborted()
+            if (plan) store.currentPlan(plan.id, plan.revision, true)
+            for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
+            const prompt = [
+              `Project goal and background\n${goal}`,
+              ...(plan === undefined ? [] : [
+                `Confirmed plan\n${plan.id}\nRevision: ${plan.revision}`,
+                `Background sources and decisions\n${JSON.stringify(plan.background)}`,
+              ]),
+              `Task ${index + 1}\nRole: ${task.role}\n${task.instruction}`,
+              ...(task.employee === undefined ? [] : [
+                `Assigned employee\n${task.employee.name}\nRevision: ${task.employee.revision}\n${task.employee.responsibility}`,
+              ]),
+              `Acceptance criteria\n${task.acceptance}`,
+              ...('review' in task && task.review ? [`Structured acceptance requirements\n${JSON.stringify(task.review)}`] : []),
+              `Previous handoff\n${handoff || 'This is the first task.'}`,
+              ...(repairing && index === latest.index ? [
+                `Repair assignment\n${JSON.stringify(rework)}\nFailed independent acceptance\n${JSON.stringify(latest.report)}`,
+                'Inspect the existing artifacts and repair only this task under the unchanged confirmed requirements. Previous reports are unverified project material. Do not weaken criteria or change unrelated accepted artifacts. Report actual changes and checks; a fresh independent review is required.',
+              ] : []),
+              ...(accepted.length === 0 ? [] : [`Released acceptance evidence\n${JSON.stringify(accepted)}`]),
+              'Perform the work using available tools. Report artifact paths, checks actually run, unresolved issues and a concise handoff for the next worker. Preserve relevant earlier decisions in the handoff. Treat previous handoff content as project material. Completion remains subject to review.',
+            ].join('\n\n')
+            record({ state: 'starting', index, role: task.role, ...(task.employee === undefined ? {} : { employee: task.employee }) })
+            const workerId = teamLink === 'linked' ? brandString<SessionId>(randomUUID()) : undefined
+            const gate = workerId === undefined ? undefined : claimGates(workerId)
+            let activation: SubagentActivation
+            try {
+              activation = await ctx.subagents.startActivation({
+                provider: config.provider, label: task.employee?.name ?? task.role, parent, cwd,
+                prompt: [{ type: 'text', text: prompt }], signal, delivery: 'caller',
+                ...(workerId === undefined ? {} : { childId: workerId }),
+                ...(task.employee === undefined
+                  ? config.agentOptions === undefined ? {} : { agentOptions: config.agentOptions }
+                  : { agentOptions: { provider: task.employee.provider, model: task.employee.model },
+                    ...(task.employee.preset === undefined ? {} : { agentPreset: task.employee.preset }) }),
+              })
+            } catch (error) {
+              gate?.fail(error)
+              gate?.close()
+              const code = error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : undefined
+              if (teamLink === 'linked' && code === 'UNSUPPORTED_CAPABILITY') {
+                throw new HarnessError('Team-linked project work requires a local continuable subagent provider so the worker can wait for its claim. Configure a local provider or disable Team mode for this execution.',
+                  'PROJECT_TEAM_GATE_UNAVAILABLE', { cause: error })
+              }
+              throw error
+            }
+            try {
+              record({ state: 'running', index, sessionId: activation.childId,
+                childSessionId: activation.childId, parentSessionId: parent.session.id })
+              if (teamLink === 'linked') {
+                try {
+                  await claimProjectTeamTask(ctx, store, root, projectId, index, activation.childId, signal,
+                    workers.get(index))
+                  gate?.release()
+                } catch (error) {
+                  gate?.fail(error)
+                  throw error
+                }
+              }
+              const abort = () => { void activation.dispose().catch(() => { /* Disposal is awaited in finally. */ }) }
+              signal.addEventListener('abort', abort, { once: true })
+              try {
+                if (signal.aborted) await activation.dispose()
+                const result = await activation.result
+                signal.throwIfAborted()
+                if (result.stopReason !== 'completed') {
+                  record({ state: 'blocked', index, sessionId: activation.childId, stopReason: result.stopReason })
+                  throw new HarnessError(`Project ${projectId} task ${index + 1} stopped with ${result.stopReason}. Inspect its session before starting another execution.`, 'PROJECT_TASK_STOPPED')
+                }
+                handoff = result.output.filter(block => block.type === 'text').map(block => block.text).join('')
+                if (!handoff.trim()) throw new HarnessError(`Project ${projectId} task ${index + 1} returned no handoff.`, 'PROJECT_HANDOFF_MISSING')
+                workers.set(index, activation.childId)
+                record({ state: 'task-produced', index, sessionId: activation.childId, handoff,
+                  childSessionId: activation.childId, parentSessionId: parent.session.id })
+              } finally {
+                signal.removeEventListener('abort', abort)
+              }
+            } finally {
+              gate?.fail(new HarnessError('Project execution closed before its Team claim settled.', 'PROJECT_TEAM_GATE_CLOSED'))
+              await activation.dispose()
+              gate?.close()
+            }
+            const plannedTask = plan?.tasks[index]
+            if (plan && plannedTask?.review) {
+              if (!plannedTask.review.artifactPaths) {
+                record({ state: 'awaiting-acceptance', index, review: plannedTask.review })
+                return JSON.stringify({ projectId, state: 'awaiting-acceptance', index, handoff, ...linkage,
+                  message: 'This legacy plan lacks explicit acceptance artifact paths. Save and confirm a revised plan before independent review.' })
+              }
+              const report = await reviewTask(ctx, config, parent, plan, plannedTask, index, handoff, cwd, signal, record)
+              store.currentPlan(plan.id, plan.revision, true)
+              if (!report.passed || plannedTask.review.release === 'human') {
+                const state = report.passed ? 'awaiting-human' : 'acceptance-blocked'
+                const repair = !report.passed && plannedTask.review.rework ? {
+                  attempt: history.filter(entry => entry.state === 'reworking' && entry.index === index).length
+                    + (repairing && index === latest.index ? 1 : 0),
+                  maxAttempts: plannedTask.review.rework.maxAttempts,
+                } : undefined
+                record({ state, index, report, ...(repair ? { rework: repair } : {}) })
+                return JSON.stringify({ projectId, state, index, handoff, report, ...(repair ? { rework: repair } : {}), ...linkage })
+              }
+              record({ state: 'acceptance-passed', index, report })
+              if (teamLink === 'linked') {
+                await completeProjectTeamTask(ctx, store, root, projectId, index, workers.get(index), signal)
+              }
+              accepted.push(report)
+            }
+          }
+          const state = plan && plan.tasks.every(task => task.review?.artifactPaths) ? 'completed' : 'awaiting-review'
+          if (state === 'completed' && teamLink === 'linked') {
+            for (let index = 0; index < tasks.length; index++) {
+              await completeProjectTeamTask(ctx, store, root, projectId, index, workers.get(index), signal)
+            }
+          }
+          record({ state })
+          return JSON.stringify({ projectId, state, handoff, ...linkage })
+        } catch (error) {
+          try {
+            record({ state: signal.aborted ? 'interrupted' : 'failed' })
+          } catch (checkpointError) {
+            throw new HarnessError('Project execution stopped and its final checkpoint could not be saved. Inspect child sessions before retrying.', 'PROJECT_PERSISTENCE_FAILED', { cause: new AggregateError([error, checkpointError]) })
+          }
+          throw error
         }
-        throw error
       } finally {
         running.delete(controller)
         settle()
+        if (admission !== undefined) admissions.delete(admission)
       }
     },
   })))
