@@ -12,9 +12,10 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MeetingStore } from './store.ts'
 import { registerProjectTools } from './project-tools.ts'
 import ProjectDashboard from './dashboard.ts'
+import ProjectRoster from './roster-management.ts'
 import { registerRosterTools } from './roster-tools.ts'
 import { registerPlanTools } from './plan-tools.ts'
-import type { MeetingId } from './types.ts'
+import type { MeetingId, EmployeeId, Employee } from './types.ts'
 
 /** Deployment-tunable meeting defaults. */
 export const Config = z.object({
@@ -26,15 +27,19 @@ export const Config = z.object({
   databasePath: z.string().min(1).optional(),
   /** Maximum bytes per UTF-8 acceptance artifact; unknown sizes fail before reading. */
   acceptanceMaxBytes: z.number().int().positive().default(4 * 1024 * 1024),
+  /** Maximum milliseconds spent discovering one employee model connection catalog. */
+  modelCatalogTimeoutMs: z.number().int().positive().max(2_147_483_647).default(10_000),
 }).prefault({})
 /** Validated meeting defaults after schema defaults. */
 export type Config = z.infer<typeof Config>
 
 /** One role taking part in a meeting round. */
 export interface MeetingRole {
+  /** Saved employee whose model route, responsibilities and optional preset are captured for this meeting. */
+  readonly employeeId?: EmployeeId | undefined
   /** Display name of the role, such as `产品经理`. */
   readonly name: string
-  /** Role brief delivered as the child's only task text. */
+  /** Role brief delivered with the shared goal and optional employee configuration. */
   readonly brief: string
 }
 
@@ -78,9 +83,11 @@ function textOf(blocks: readonly ContentBlock[]): string {
   return blocks.filter(block => block.type === 'text').map(block => block.text).join('')
 }
 
-/** The task text a role receives: the shared goal, its own brief, and nothing from other roles. */
-function rolePrompt(request: MeetingStartRequest, role: MeetingRole): string {
-  return `会议目标：${request.requirement}\n\n角色：${role.name}\n${role.brief}`
+/** Shared goal, role brief and optional employee configuration, without sibling inputs or outputs. */
+function rolePrompt(request: MeetingStartRequest, role: MeetingRole, employee?: Employee): string {
+  return [`会议目标：${request.requirement}\n\n角色：${role.name}\n${role.brief}`,
+    ...(employee === undefined ? [] : [`Assigned employee configuration\n${JSON.stringify(employee)}`]),
+  ].join('\n\n')
 }
 
 /**
@@ -93,7 +100,8 @@ function rolePrompt(request: MeetingStartRequest, role: MeetingRole): string {
 /** Model-supplied meeting request; validated at the tool boundary. */
 const meetingRequest = z.object({
   requirement: z.string().min(1),
-  roles: z.array(z.object({ name: z.string().min(1), brief: z.string().min(1) })).min(1),
+  roles: z.array(z.object({ name: z.string().min(1), brief: z.string().min(1),
+    employeeId: z.string().min(1).transform(id => brandString<EmployeeId>(id)).optional() })).min(1),
 })
 
 /** Owns meeting rounds, project execution tools and their checkpoint database. */
@@ -118,6 +126,7 @@ export default class MeetingRoom extends Service {
     registerRosterTools(ctx, this.store)
     registerPlanTools(ctx, this.store)
     ctx.plugin(ProjectDashboard, { store: this.store, acceptanceMaxBytes: config.acceptanceMaxBytes })
+    ctx.plugin(ProjectRoster, { store: this.store, modelCatalogTimeoutMs: config.modelCatalogTimeoutMs })
     this.ctx.tools.register(defineTool({
       name: 'meeting_start',
       description: 'Run an independent discussion from the main conversation. Participant children appear in its existing subagent catalog. Returns meeting identity and opinions, not an approved requirement. Use meeting_record_decision to retain the main assistant conclusion and follow-up actions.',
@@ -132,7 +141,8 @@ export default class MeetingRoom extends Service {
             additionalProperties: false,
             properties: {
               name: { type: 'string', required: true, description: 'Role display name.' },
-              brief: { type: 'string', required: true, description: 'Role brief delivered as the child only task text.' },
+              brief: { type: 'string', required: true, description: 'Role brief delivered with the shared goal and optional employee configuration.' },
+              employeeId: { type: 'string', description: 'Saved employee from employee_list. Uses that employee model provider, model, responsibility and optional preset independently of the main assistant. Omit to inherit the main assistant route.' },
             },
           },
         },
@@ -197,6 +207,14 @@ export default class MeetingRoom extends Service {
     caller?: Agent): Promise<MeetingStartResult> {
     if (this.closing) throw new ToolContextUnavailableError('Meeting service is closing.')
     if (caller && this.ctx.subagents.rootOf(caller) !== caller) throw new HarnessError('Start the meeting from the main conversation.', 'MEETING_MAIN_REQUIRED')
+    const employees = this.store.employees()
+    const participants = request.roles.map((role) => {
+      const employee = role.employeeId === undefined ? undefined : employees.find(item => item.id === role.employeeId)
+      if (role.employeeId !== undefined && !employee) {
+        throw new HarnessError('A selected meeting employee is missing. Read employee_list and select an existing employee.', 'MEETING_EMPLOYEE_MISSING')
+      }
+      return { role, employee }
+    })
     const controller = new AbortController()
     const activeSignal = AbortSignal.any([signal, controller.signal])
     activeSignal.throwIfAborted()
@@ -215,11 +233,15 @@ export default class MeetingRoom extends Service {
       const parent = caller ?? owned?.agent
       if (!parent) throw new ToolContextUnavailableError('Meeting parent is unavailable.')
       try {
-        for (const role of request.roles) {
+        for (const { role, employee } of participants) {
           activeSignal.throwIfAborted()
           const activation = await this.ctx.subagents.startActivation({
             provider: this.config.provider, label: role.name, parent,
-            prompt: [{ type: 'text', text: rolePrompt(request, role) }], signal: activeSignal, delivery: 'caller',
+            prompt: [{ type: 'text', text: rolePrompt(request, role, employee) }], signal: activeSignal, delivery: 'caller',
+            ...(employee === undefined ? {} : {
+              agentOptions: { provider: employee.provider, model: employee.model },
+              ...(employee.preset === undefined ? {} : { agentPreset: employee.preset }),
+            }),
           })
           try {
             const abort = () => { void activation.dispose().catch(() => { /* Awaited in the activation finally. */ }) }

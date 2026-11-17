@@ -33,7 +33,14 @@ it('contributes session meeting actions and routes project corrections and conti
   const meetings = vi.fn<(id: string, signal: AbortSignal) => Promise<{ ok: true; value: MeetingRecord[] }>>(
     async () => ({ ok: true, value: [] }),
   )
-  runtime.remote.provideNamespaces({ projectDashboard: {
+  const directory = Promise.withResolvers<{ ok: true; value: [] }>()
+  runtime.remote.provideNamespaces({ projectRoster: {
+    connections: (signal: AbortSignal) => {
+      signal.addEventListener('abort', () => { directory.resolve({ ok: true, value: [] }) }, { once: true })
+      return directory.promise
+    },
+    saveEmployee: async () => ({ ok: true, value: {} }), saveTeam: async () => ({ ok: true, value: {} }),
+  }, projectDashboard: {
     timeline: async () => ({ ok: true, value: [{ sessionId: 'main-root', projectId: 'approved-run', state: 'released', checkpoint: 43 }] }),
     plans: async () => ({ ok: true, value: [] }),
     roster: async () => ({ ok: true, value: { employees: [], teams: [] } }), confirmPlan, confirmAcceptance, meetings,
@@ -47,6 +54,7 @@ it('contributes session meeting actions and routes project corrections and conti
     if (!project) throw new Error('Expected project injection')
     await vi.waitFor(() => { expect(project.hooks.catalog.getSnapshot().loading).toBe(false) })
     expect(project.hooks.catalog.getSnapshot().failed).toBe(false)
+    expect(project.hooks.catalog.getSnapshot().connectionsLoading).toBe(true)
     await project.confirmPlan('reviewed-plan', 3)
     expect(confirmPlan).toHaveBeenCalledWith('reviewed-plan', 3, expect.any(AbortSignal))
     await vi.waitFor(() => { expect(project.hooks.catalog.getSnapshot().loading).toBe(false) })

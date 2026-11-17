@@ -26,6 +26,8 @@ Use Ask assistant to arrange a meeting in the main conversation header More menu
 
 The project workspace shows saved employees, teams, latest plan versions, sourced background, actual checkpoints, handoffs, acceptance reports and the Team task identity and status recorded for each task. Plan editing, saved-plan execution, corrections and released execution continuation prepare drafts in the associated main conversation. A legacy plan with no known main conversation offers an explicit handoff draft that asks the assistant to preserve the content and save a newly associated revision for confirmation.
 
+Configure employees directly in the workspace: enter responsibilities, select a registered model connection, enter a model id and optionally name a DSH preset. Each employee has an independent route; custom gateway model ids are supported. Create or edit reusable teams by selecting saved employees. Saves check the displayed revision, retain form input on failure and do not start model work or change confirmed plans. Connection catalogs load independently of project records and do not certify credentials; configure credentials through the existing model-provider settings. A unified team-mode picker beside the standard preset remains pending.
+
 Task execution links open the existing subagent conversation using its recorded direct parent and child identities. The existing root subagent catalog also receives a project-task footer from the same checkpoint source. Produced counts remain distinct from acceptance; this footer displays Team task identities and statuses but never changes them.
 
 | Control | Effect |
@@ -38,7 +40,7 @@ Task execution links open the existing subagent conversation using its recorded 
 
 ## Understand the implementation
 
-The plugin mounts the Host projectDashboard Remote and registers panels, a sessionHeader context-menu contribution and the existing subagent footer through reversible effects. Meeting selection aborts the previous query; late results cannot populate another conversation. Disposal aborts and joins outstanding queries. Model work starts only after the user sends a prepared draft or the main assistant calls its tools.
+The plugin mounts the Host projectDashboard and projectRoster Remotes and registers panels, a sessionHeader context-menu contribution and the existing subagent footer through reversible effects. Meeting selection aborts the previous query; late results cannot populate another conversation. Disposal aborts and joins outstanding queries. Model work starts only after the user sends a prepared draft or the main assistant calls its tools.
 
 SessionMeetings renders actual Host records. ProjectPage and SessionProjects share one project checkpoint source. The older prototype meeting components remain unmounted and do not supply product data.
 

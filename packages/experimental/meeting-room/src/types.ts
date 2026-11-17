@@ -6,6 +6,48 @@ export type EmployeeId = Branded<'ProjectEmployeeId'>
 /** Stable identity of a reusable team template. */
 export type ProjectTeamId = Branded<'ProjectTeamId'>
 
+/** Employee fields reviewed in the editor; zero expected revision creates a record without an id. */
+export interface EmployeeSaveInput {
+  /** Existing identity for updates; omitted on creation. */
+  id?: EmployeeId | undefined
+  /** Exact prior revision, or zero for creation. */
+  expectedRevision: number
+  /** Employee display name. */
+  name: string
+  /** Persistent work instructions. */
+  responsibility: string
+  /** Registered model connection key. */
+  provider: string
+  /** Model id, including provider-supported ids absent from its advisory catalog. */
+  model: string
+  /** Optional registered DSH capability composition. */
+  preset?: string | undefined
+}
+
+/** Team template fields reviewed in the editor; membership references existing employees. */
+export interface TeamSaveInput {
+  /** Existing identity for updates; omitted on creation. */
+  id?: ProjectTeamId | undefined
+  /** Exact prior revision, or zero for creation. */
+  expectedRevision: number
+  /** Team display name. */
+  name: string
+  /** Distinct existing employee ids. */
+  memberIds: EmployeeId[]
+}
+
+/** Active model route and advisory catalog; credentials are not included or certified. */
+export interface RosterConnection {
+  /** Provider route key used in employee model requests. */
+  id: string
+  /** Provider display name. */
+  name: string
+  /** Advertised models; an empty list does not prohibit custom model ids. */
+  models: { id: string; name: string }[]
+  /** Whether catalog discovery failed for this route. */
+  failed: boolean
+}
+
 /** Employee configuration captured when a project run is admitted. */
 export interface Employee {
   /** Stable roster identity used by team membership and task assignments. */

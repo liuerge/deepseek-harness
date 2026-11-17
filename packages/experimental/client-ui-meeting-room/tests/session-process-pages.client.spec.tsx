@@ -28,13 +28,15 @@ it.each([0, 1])('keeps both review generations and routes only authorized repair
       rework: { attempt, maxAttempts: 1 }, report: { ...report, reviewers: [{ ...report.reviewers[0]!, sessionId: 'second-review',
         criteria: [{ id: 'AC-1', status: 'fail', notes: 'Repair needs another check', evidencePaths: [] }] }] } },
   ]
-  const catalog = { records, employees: [], teams: [], plans: [], loading: false, failed: false }
+  const catalog = { records, connections: [], connectionsLoading: false, connectionsFailed: false,
+    employees: [], teams: [], plans: [], loading: false, failed: false }
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   const continueProject = vi.fn()
   const openWorker = vi.fn()
   const noop = vi.fn()
   render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, delegateTeam: noop, preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+    preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     approveAcceptance: noop, continueProject, openMain: noop, openWorker, adoptPlan: noop } as Parameters<typeof ProjectPage>[0]} />)
   expect(screen.getByText('Initial failure')).toBeTruthy()
   expect(screen.getByText('Repair needs another check')).toBeTruthy()
@@ -53,12 +55,14 @@ it('shows the Team task association and warns when the execution was not mirrore
     { sessionId: 'main', projectId: 'project', checkpoint: 2, state: 'running', index: 0,
       teamTask: { id: 'task-3', revision: 2, status: 'in_progress' } },
   ]
-  const catalog = { records, employees: [], teams: [], plans: [], loading: false, failed: false }
+  const catalog = { records, connections: [], connectionsLoading: false, connectionsFailed: false,
+    employees: [], teams: [], plans: [], loading: false, failed: false }
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   const noop = vi.fn()
   render(<ProjectPage {...{
     useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, delegateTeam: noop, preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+    preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan: noop,
   } as Parameters<typeof ProjectPage>[0]} />)
   expect(screen.getByText(zh['project.team-disabled'])).toBeTruthy()
@@ -91,13 +95,15 @@ it('offers an explicit handoff for legacy plans rather than enabling actions wit
   const plan: ProjectPlan = { id: 'legacy-plan' as ProjectPlan['id'], revision: 1, goal: 'Legacy goal', background: [],
     team: { id: 'team' as ProjectPlan['team']['id'], revision: 1, name: 'Team', memberIds: [employee.id] }, employees: [employee],
     tasks: [{ role: 'Author', employeeId: employee.id, instruction: 'Produce artifact', acceptance: 'Read the artifact' }], confirmed: true }
-  const catalog = { records: [] as ProjectCheckpoint[], employees: [employee], teams: [plan.team], plans: [plan],
+  const catalog = { records: [] as ProjectCheckpoint[], connections: [], connectionsLoading: false, connectionsFailed: false,
+    employees: [employee], teams: [plan.team], plans: [plan],
     loading: false, failed: false }
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   const adoptPlan = vi.fn()
   const noop = vi.fn()
   render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, delegateTeam: noop, preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+    preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan } as Parameters<typeof ProjectPage>[0]} />)
   expect(screen.getByRole('button', { name: zh['plan.edit'] }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: zh['plan.run'] }).hasAttribute('disabled')).toBe(true)
@@ -111,7 +117,8 @@ it('filters existing-catalog project tasks by the exact main conversation and la
     { sessionId: 'main', projectId: 'project', checkpoint: 2, state: 'task-produced', index: 0 },
     { sessionId: 'other', projectId: 'other-project', checkpoint: 3, state: 'started', goal: 'Unrelated project' },
   ]
-  const catalog = { records, employees: [], teams: [], plans: [], loading: false, failed: false }
+  const catalog = { records, connections: [], connectionsLoading: false, connectionsFailed: false,
+    employees: [], teams: [], plans: [], loading: false, failed: false }
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   render(<SessionProjects {...{ sessionId: 'main', useCatalog, t: makeTranslate(zh), refresh: vi.fn(), openWorkspace: vi.fn() } as Parameters<typeof SessionProjects>[0]} />)
   expect(screen.getByText('Main project')).toBeTruthy()

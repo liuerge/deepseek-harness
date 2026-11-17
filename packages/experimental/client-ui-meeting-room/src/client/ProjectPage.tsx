@@ -4,6 +4,8 @@ import type { Employee, ProjectTeam, ProjectPlan, AcceptanceReport } from '@deep
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { NS } from './locales.ts'
 import css from './ProjectPage.module.css'
+import { RosterEditor } from './RosterEditor.tsx'
+import type { EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
 
 /** Persisted execution checkpoint exposed by the project query. */
 export interface ProjectCheckpoint {
@@ -33,11 +35,16 @@ export interface ProjectInjected {
     plans: ProjectPlan[]
     loading: boolean
     failed: boolean
+    connections: RosterConnection[]
+    connectionsLoading: boolean
+    connectionsFailed: boolean
   }> }
   refresh: () => void
   newProject: () => void
   configureEmployee: () => void
   configureTeam: () => void
+  saveEmployee: (input: EmployeeSaveInput) => Promise<boolean>
+  saveTeam: (input: TeamSaveInput) => Promise<boolean>
   delegateTeam: (id: string) => void
   preparePlan: () => void
   confirmPlan: (id: string, revision: number) => Promise<void>
@@ -58,7 +65,7 @@ type Props = PropsRuntime<'main'> & PropsLocale<typeof NS> & InjectFace<ProjectI
  * @returns Dashboard with loading, failure and empty feedback.
  */
 export function ProjectPage(props: Props) {
-  const { useCatalog, t, refresh, newProject, configureEmployee, configureTeam, delegateTeam } = props
+  const { useCatalog, t, refresh, newProject, saveEmployee, saveTeam, delegateTeam } = props
   const { preparePlan, confirmPlan, runPlan, editPlan, approveAcceptance, continueProject, openMain, openWorker } = props
   const { adoptPlan } = props
   const catalog = useCatalog(value => value)
@@ -87,25 +94,9 @@ export function ProjectPage(props: Props) {
     </header>
     {catalog.loading && <p role="status">{t('project.loading')}</p>}
     {catalog.failed && <p role="alert">{t('project.error')}</p>}
-    <section className={css.project}>
-      <header className={css.header}>
-        <h2>{t('roster.title')}</h2>
-        <div className={css.actions}>
-          <Button onClick={configureEmployee}>{t('roster.employee')}</Button>
-          <Button disabled={catalog.employees.length === 0} onClick={configureTeam}>{t('roster.team')}</Button>
-        </div>
-      </header>
-      {!catalog.loading && !catalog.failed && catalog.employees.length === 0 && <p>{t('roster.empty')}</p>}
-      <ul className={css.tasks}>{catalog.employees.map(employee => <li key={employee.id}>
-        <strong>{employee.name}</strong><span className={css.secondary}>{employee.provider} / {employee.model}</span>
-        <p>{employee.responsibility}</p>{employee.preset && <p className={css.secondary}>{employee.preset}</p>}
-      </li>)}</ul>
-      {catalog.teams.map(team => <div key={team.id} className={css.header}>
-        <p><strong>{team.name}</strong> · {team.memberIds.map(id =>
-          catalog.employees.find(employee => employee.id === id)?.name ?? id).join(' · ')}</p>
-        <Button onClick={() => { delegateTeam(team.id) }}>{t('roster.delegate')}</Button>
-      </div>)}
-    </section>
+    <RosterEditor employees={catalog.employees} teams={catalog.teams} connections={catalog.connections}
+      connectionsLoading={catalog.connectionsLoading} connectionsFailed={catalog.connectionsFailed}
+      loading={catalog.loading} saveEmployee={saveEmployee} saveTeam={saveTeam} delegateTeam={delegateTeam} t={t} />
     <section className={css.project}>
       <header className={css.header}>
         <h2>{t('plan.title')}</h2><Button onClick={preparePlan}>{t('plan.prepare')}</Button>

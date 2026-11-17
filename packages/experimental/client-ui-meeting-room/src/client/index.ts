@@ -17,6 +17,7 @@ import { mountSessionMeetings } from './session-meetings.ts'
 import { prepareMainPrompt } from './session-navigation.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SessionProjects } from './SessionProjects.tsx'
+import type { EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -36,7 +37,7 @@ export async function apply(ctx: ClientContext): Promise<void> {
   const unmount = await ctx.remote.$mount(remote)
   ctx.effect(() => unmount)
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'client-ui-meeting-room: dictionaries')
-  await ctx.inject(['remote.projectDashboard'], (child) => { mountProjectPage(child); mountSessionMeetings(child) })
+  await ctx.inject(['remote.projectDashboard', 'remote.projectRoster'], (child) => { mountProjectPage(child); mountSessionMeetings(child) })
 }
 
 /** Mount the retained project catalog and its requirement entry action. */
@@ -49,13 +50,39 @@ function mountProjectPage(ctx: ClientContext): void {
     plans: ProjectPlan[]
     loading: boolean
     failed: boolean
+    connections: RosterConnection[]
+    connectionsLoading: boolean
+    connectionsFailed: boolean
   }>({
-    records: [], employees: [], teams: [], plans: [], loading: false, failed: false,
+    records: [], employees: [], teams: [], plans: [], connections: [], loading: false, failed: false,
+    connectionsLoading: false, connectionsFailed: false,
   })
   let pending: Promise<void> | undefined
   let confirming: Promise<void> | undefined
-  ctx.effect(() => async () => { lifetime.abort(); await Promise.allSettled([pending, confirming]) })
+  let saving: Promise<boolean> | undefined
+  let discovering: Promise<void> | undefined
+  ctx.effect(() => async () => { lifetime.abort(); await Promise.allSettled([pending, confirming, saving, discovering]) })
+  const discover = (): void => {
+    if (discovering || lifetime.signal.aborted) return
+    catalog.update((state) => { state.connectionsLoading = true; state.connectionsFailed = false })
+    discovering = (async () => {
+      try {
+        const result = await ctx.remote.projectRoster.connections(lifetime.signal)
+        lifetime.signal.throwIfAborted()
+        catalog.update((state) => {
+          state.connectionsLoading = false
+          state.connectionsFailed = !result.ok
+          if (result.ok) state.connections = result.value
+        })
+      } catch (_error) {
+        if (!lifetime.signal.aborted) catalog.update((state) => {
+          state.connectionsLoading = false; state.connectionsFailed = true
+        })
+      }
+    })().finally(() => { discovering = undefined })
+  }
   const refresh = (): void => {
+    discover()
     if (pending || lifetime.signal.aborted) return
     catalog.update((state) => { state.loading = true; state.failed = false })
     pending = (async () => {
@@ -67,7 +94,10 @@ function mountProjectPage(ctx: ClientContext): void {
         ])
         lifetime.signal.throwIfAborted()
         if (result.ok && roster.ok && plans.ok) {
-          catalog.set({ records: result.value, ...roster.value, plans: plans.value, loading: false, failed: false })
+          catalog.update((state) => {
+            state.records = result.value; state.employees = roster.value.employees; state.teams = roster.value.teams
+            state.plans = plans.value; state.loading = false; state.failed = false
+          })
         }
         else catalog.update((state) => { state.loading = false; state.failed = true })
       } catch (_error) {
@@ -94,6 +124,18 @@ function mountProjectPage(ctx: ClientContext): void {
     return confirming
   }
   const t = ctx.locale.bind(NS)
+  const save = (action: () => Promise<{ ok: boolean }>): Promise<boolean> => {
+    if (saving || lifetime.signal.aborted) return Promise.resolve(false)
+    saving = (async () => {
+      try {
+        const result = await action()
+        lifetime.signal.throwIfAborted()
+        if (result.ok) { await pending; refresh(); await pending }
+        return result.ok
+      } catch (_error) { return false }
+    })().finally(() => { saving = undefined })
+    return saving
+  }
   const mainPrompt = (sessionId: string | undefined, prompt: string): void => {
     if (!sessionId) { catalog.update((state) => { state.failed = true }); return }
     try { prepareMainPrompt(ctx, sessionId, prompt, t('project.error')) }
@@ -113,6 +155,8 @@ function mountProjectPage(ctx: ClientContext): void {
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: id, locale: NS,
     inject: () => ({ hooks: { catalog }, refresh,
+      saveEmployee: (input: EmployeeSaveInput) => save(() => ctx.remote.projectRoster.saveEmployee(input, lifetime.signal)),
+      saveTeam: (input: TeamSaveInput) => save(() => ctx.remote.projectRoster.saveTeam(input, lifetime.signal)),
       confirmPlan: (id: string, revision: number) => confirm(() => ctx.remote.projectDashboard.confirmPlan(id, revision, lifetime.signal)),
       approveAcceptance: (id: string, checkpoint: number) => confirm(() =>
         ctx.remote.projectDashboard.confirmAcceptance(id, checkpoint, lifetime.signal)),

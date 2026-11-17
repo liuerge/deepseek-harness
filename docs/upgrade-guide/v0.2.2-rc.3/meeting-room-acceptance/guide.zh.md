@@ -11,7 +11,7 @@ description: "会议插件的自定义组合需要文件和工作目录服务，
 
 会议插件在 agents、tools 和 subagents 之外还依赖 `fs` 和 `workingDirectory`。缺少其中任一服务的自定义组合无法激活该插件。内置 Web 和 headless 基础组合均提供这两项服务。保存的计划仍可读取；未明确产物路径的结构化验收节点在产出后停住，需要修改并重新确认计划才能执行验收员工检查。
 
-meeting_start 工具返回包含 meetingId、sessionId 和 rounds 的 JSON 对象，替代按角色拼接的文本。工具发起的参与角色归发起主会话。独立会议侧边栏入口改为会话页头菜单。SQLite 升至 schema 4，旧应用版本拒绝升级后的数据库。新计划保存 originSessionId，未关联旧草稿需要明确接续到主会话。
+meeting_start 工具返回包含 meetingId、sessionId 和 rounds 的 JSON 对象，替代按角色拼接的文本。工具发起的参与角色归发起主会话。独立会议侧边栏入口改为会话页头菜单。SQLite 升至 schema 5，包含 Team 共享任务关联；旧应用版本拒绝升级后的数据库。新计划保存 originSessionId，未关联旧草稿需要明确接续到主会话。
 
 ## 迁移
 
@@ -22,3 +22,4 @@ meeting_start 工具返回包含 meetingId、sessionId 和 rounds 的 JSON 对�
 4. 将 meeting_start 结果读取者更新为解析 JSON 字段。从主会话页头更多菜单查看会议，用 meeting_records 和 meeting_record_decision 留存主助手结论。未关联历史会议行继续保留，不推测负责人。
 5. 对没有执行记录或主会话关联的旧计划，选择让主助手接续旧计划，发送准备好的接续草稿，并确认新保存的版本。
 6. 已有执行仅能从原主会话续跑或返工。授权有界返工时，在启动前保存并确认含 `review.rework.maxAttempts` 的计划，用 `project_execute` 领取最新验收失败检查点。未授权或次数耗尽时先检查并修订计划；已有计划不会自动获得返工授权。
+7. 让会议角色使用独立模型路由时，保存含显式提供者和模型字段的员工，在所选角色中提供对应 `employeeId`，通过既有 DSH 提供者配置连接与凭据。未引用员工的角色保留继承路由，缺失员工引用在派发前拒绝会议。

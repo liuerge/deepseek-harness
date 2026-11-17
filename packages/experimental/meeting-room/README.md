@@ -39,6 +39,8 @@ Mount the plugin with a subagent provider and the route the meeting Session and 
 
 Call `ctx.meetingRoom.startMeeting(request, signal?, caller?)` from your own orchestration or tool. The request carries the shared `requirement` and the roles to run; each role supplies a `name` and a `brief`.
 
+A role may select a saved `employeeId` from `employee_list` to use that employee's provider, model, responsibilities and optional preset independently of the main assistant. All employee references are resolved before any participant starts; a missing reference rejects the meeting. The captured employee configuration appears in the child's logged input, and model requests record the route actually used. Roles without an employee reference retain inherited routing. Configure model connections and credentials through the existing DSH providers, including `llm-pi-ai`; employee records contain no API keys. The plugin's `provider: spawn` selects the subagent execution provider, not the model vendor.
+
 - The returned meetingId identifies the process; sessionId identifies the initiating main conversation or owned standalone root whose catalog contains its participants.
 - Each returned round carries the role name, the child Session id, and the final assistant text.
 - `signal` cancels child startup and remaining work; completed rounds stay in their logs.
@@ -48,8 +50,9 @@ Call `ctx.meetingRoom.startMeeting(request, signal?, caller?)` from your own orc
 | Field | Default | Meaning |
 |---|---|---|
 | `provider` | `spawn` | Registered subagent provider used for every role round. |
-| `agentOptions` | unset | Model route for standalone meetings and unassigned project workers. Tool-driven meeting participants inherit their main agent route. |
+| `agentOptions` | unset | Model route for standalone meetings and unassigned project workers. Tool-driven participants without employee references inherit their main agent route. |
 | `acceptanceMaxBytes` | `4194304` | Maximum bytes per UTF-8 acceptance artifact. |
+| `modelCatalogTimeoutMs` | `10000` | Per-connection employee model-catalog discovery deadline in milliseconds. |
 
 ### Versioned project plans
 
@@ -64,6 +67,8 @@ Tasks may include `review` with independent team reviewers, criteria, methods, p
 Failed acceptance retains its report and blocks downstream work. A confirmed `review.rework.maxAttempts` authorizes a positive bounded number of repair executions for that task; omission disables repair. The original main conversation calls `project_execute({ projectId, expectedCheckpoint })` on the exact latest `acceptance-blocked` checkpoint. An atomic `reworking` claim links the attempt to its failed checkpoint before tools start. The assigned employee receives the failed report and unchanged requirements, uses the original directory and undergoes fresh independent review. Earlier reports remain readable, and human gates still require workspace release. Failed or interrupted attempts consume the limit; other failed or interrupted execution states cannot resume this way and require inspection. New plan revisions invalidate old repair claims. The workspace prepares repair drafts and displays the confirmed limit and consumed attempts; it does not automatically send drafts.
 
 ### Reusable employees and teams
+
+The authenticated `projectRoster` service exposes registered connection catalogs and version-checked employee/team saves for the workspace editor. Saving an employee requires a registered provider route; its model id may be absent from the advisory catalog. A connection's registration does not verify credentials. Model-catalog discovery has a per-route deadline and settles on cancellation or plugin disposal; failures are explicit per route. The provider still owns any underlying catalog request that its adapter cannot cancel. Saving roster configuration neither confirms a plan nor starts model work, and confirmed plans retain their captured employee configurations.
 
 `employee_list` returns the Host's saved employees and team templates. `employee_save` saves a name, responsibilities, explicit provider/model and optional registered DSH `preset`. `team_save` saves a team of distinct existing employee ids. Creation omits the id and uses `expectedRevision: 0`; updates use the current id and revision. A stale save fails with `PROJECT_ROSTER_STALE`. The file database preserves these records across restart and upgrades the existing project database to schema version 5 while retaining history.
 
@@ -85,6 +90,8 @@ When the initiating root has Agent Teams enabled, admitting a confirmed plan cre
 
 Automatic release completes the task after the project records `acceptance-passed`. Human release stays `in_progress` until the release is synchronized during the next accepted continuation. Failed acceptance, repair, blocking and interruption keep the task `in_progress` with its worker, and the project checkpoint records the real reason. Repeated admission reuses a durably admitted run and adopts marker-matched tasks instead of creating duplicates.
 
+Linked workers reserve their child Session identity and wait at `agent/pre-step` until the Team claim succeeds; no model request or tool execution precedes the claim. Providers without reserved-child support fail with `PROJECT_TEAM_GATE_UNAVAILABLE`. Manual board edits, releases, reassignments and externally completed tasks are checked against retained revisions and owners rather than adopted as project actions. Partial-link retries preserve prior association revisions. Concurrent admissions are serialized within this Host instance, and unload waits for linking, release synchronization and worker cleanup before closing storage. Cross-process exclusion and crash recovery are not provided. Workspace human release checks artifacts; Team conflicts are checked by subsequent execution before downstream dispatch.
+
 Team mode off at admission records `teamLink: disabled` and runs project-only; a missing Team service records `unavailable`. Turning Team mode off after linking stops the next dispatch or continuation with `PROJECT_TEAM_DISABLED`; re-enable it and inspect the board before continuing. Deleted, completed-ahead or missing Team tasks stop the run for inspection. Existing unlinked executions are not retroactively linked. The optional integration lives in `src/team-link.ts`; `src/store.ts` owns the association table.
 
 ## Understand the implementation
@@ -94,7 +101,7 @@ Team mode off at admission records `teamLink: disabled` and runs project-only; a
 
 startMeeting(request, signal, caller) uses the supplied main agent as the participants’ parent. Without caller it owns a new root. Role children use delivery caller and isolated goal/role prompts. Partial or non-completed outputs stop remaining roles. Cancellation and plugin unload dispose active participants and join execution before storage closes.
 
-Isolation is a property of prompt construction, not of filtering existing context: `rolePrompt` emits the shared goal, the role name, and that role's brief. A future discussion round that must read earlier drafts would have to build that text explicitly, which keeps the first round independent by construction.
+`rolePrompt` emits the shared goal, role name, role brief and optional captured employee configuration. It includes no sibling inputs or outputs. Discussion rounds that need earlier drafts must explicitly include them.
 
 SQLite schema version 5 retains meeting associations, participant outputs, immutable conclusion revisions and Team task associations. Existing meetings and rounds remain stored; unlinked historical rows are not assigned to a conversation. A failed final checkpoint reports unknown saved state and requires inspection before retrying.
 
@@ -128,11 +135,11 @@ The declaration is stable, so it does not change the prefix per call. Approval a
 
 #### What the model sees
 
-Each role receives one user message: `会议目标：<requirement>`, its own role name, and its brief. No sibling prompt or draft appears in that request, because the spawn child starts from an empty Session.
+Each role receives one user message: `会议目标：<requirement>`, its own role name, brief and optional captured employee configuration. No sibling prompt or draft appears in that request, because the spawn child starts from an empty Session.
 
 #### Token effect
 
-One request per role, sized by the goal and that role's brief; the role prompt adds no tool declarations or system-prompt section.
+One request per role, sized by the goal, brief and optional employee configuration; the role prompt adds no tool declarations or system-prompt section.
 
 #### KV Cache effect
 

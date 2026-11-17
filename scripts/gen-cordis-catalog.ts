@@ -186,6 +186,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   projectDashboard: 'experimental authenticated project Remote internal to meeting-room — packages/experimental/meeting-room/README.md owns its behavior',
+  projectRoster: 'experimental authenticated roster Remote internal to meeting-room — packages/experimental/meeting-room/README.md owns its behavior',
   timeline: 'experimental session data service internal to the bundle — packages/experimental/timeline/README.md owns its behavior',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',

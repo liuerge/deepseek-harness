@@ -2634,7 +2634,7 @@ export interface McpManagedServerEntry {
 
 - `inject`: `agents` · `subagents` · `tools` · `workingDirectory` · `fs`
 - `refs`: `z` (`zod`)
-- `source`: [`packages/experimental/meeting-room/src/index.ts:31`](../packages/experimental/meeting-room/src/index.ts)
+- `source`: [`packages/experimental/meeting-room/src/index.ts:34`](../packages/experimental/meeting-room/src/index.ts)
 
 ```ts config-catalog
 /** Validated meeting defaults after schema defaults. */

@@ -23,9 +23,10 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { loadStoredSession } from '../../../subagent/subagent/tests/persistence-helpers.ts'
 import { mountLocalActivations } from '../../../subagent/subagent/tests/local-activation.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
-import MeetingRoom from '../src/index.ts'
+import MeetingRoom, { Config } from '../src/index.ts'
 import type { EmployeeId, ProjectTeamId, ProjectExecutionId } from '../src/types.ts'
 import type {} from '../src/dashboard.ts'
+import type {} from '../src/roster-management.ts'
 import LocalFileSystem from '../../../fs/fs-local/src/index.ts'
 import TeamService from '@deepseek-ai/dsh-agent-team'
 import { linkProjectTeamTasks, teamTaskMarker } from '../src/team-link.ts'
@@ -158,6 +159,146 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
 }
 
 describe('meeting room', () => {
+  it('rejects catalog deadlines outside the supported timer range at configuration parsing', () => {
+    expect(() => Config.parse({ modelCatalogTimeoutMs: 4_294_967_296 })).toThrow()
+    expect(() => Config.parse({ modelCatalogTimeoutMs: 0 })).toThrow()
+  })
+
+  it.each(['caller', 'plugin'])('cancels catalog discovery through %s without waiting for an unresponsive provider', async (source) => {
+    const { ctx } = await setup([])
+    const blocked = Promise.withResolvers<[]>()
+    const listing = vi.spyOn(ctx.llm, 'listModels').mockReturnValue(blocked.promise)
+    const controller = new AbortController()
+    const outcome = ctx.projectRoster.connections(controller.signal).then(() => 'returned', () => 'cancelled')
+    try {
+      expect(listing).toHaveBeenCalled()
+      if (source === 'caller') controller.abort()
+      else await ctx.fiber.dispose()
+      expect(await outcome).toBe('cancelled')
+    } finally { blocked.resolve([]); await blocked.promise }
+  })
+
+  it('edits reusable multi-provider employees and teams without dispatching work or overwriting a newer revision', async () => {
+    const { ctx, adapter, databasePath } = await setup([])
+    const other = new MockAdapter([])
+    ctx.effect(() => ctx.llm.registerAdapter(['another-vendor'], other))
+    const signal = new AbortController().signal
+    const connections = await ctx.projectRoster.connections(signal)
+    expect(connections.map(connection => connection.id)).toEqual(['mock', 'another-vendor'])
+    const input = { expectedRevision: 0, name: 'Independent reviewer', responsibility: 'Read and review actual files.',
+      provider: 'another-vendor', model: 'custom-model-not-in-catalog' }
+    const reviewer = await ctx.projectRoster.saveEmployee(input, signal)
+    const author = await ctx.projectRoster.saveEmployee({ ...input, name: 'Author', provider: 'mock', model: 'author-model' }, signal)
+    const team = await ctx.projectRoster.saveTeam({ expectedRevision: 0, name: 'Two vendors', memberIds: [author.id, reviewer.id] }, signal)
+    const updated = await ctx.projectRoster.saveEmployee({ ...input, id: reviewer.id, expectedRevision: 1,
+      responsibility: 'Check every acceptance criterion.' }, signal)
+    expect(updated.revision).toBe(2)
+    expect(() => ctx.projectRoster.saveEmployee({ ...input, id: reviewer.id, expectedRevision: 1 }, signal))
+      .toThrow(expect.objectContaining({ code: 'PROJECT_ROSTER_STALE' }))
+    expect(() => ctx.projectRoster.saveEmployee({ ...input, provider: 'not-registered' }, signal))
+      .toThrow(expect.objectContaining({ code: 'PROJECT_ROSTER_PROVIDER' }))
+    expect(() => ctx.projectRoster.saveTeam({ expectedRevision: 0, name: 'Duplicate', memberIds: [author.id, author.id] }, signal))
+      .toThrow(expect.objectContaining({ code: 'PROJECT_ROSTER_INPUT' }))
+    const persisted = new MeetingStore(databasePath)
+    try {
+      expect(persisted.employees().find(employee => employee.id === reviewer.id)).toEqual(updated)
+      expect(persisted.teams()).toEqual([team])
+      expect(persisted.plans()).toEqual([])
+      expect(persisted.projectTimeline()).toEqual([])
+    } finally { persisted.close() }
+    expect(adapter.requests).toHaveLength(0)
+    expect(other.requests).toHaveLength(0)
+  })
+
+  it('routes an author and independent reviewer to different provider adapters within the same Team execution', async () => {
+    const { ctx, databasePath, directory, adapter: mainAdapter } = await setup([], { team: true })
+    const artifact = join(directory, 'mixed-provider.md')
+    const authorAdapter = new MockAdapter([
+      toolCallResponse('mixed-write', 'write_delivery', { content: 'MULTI_PROVIDER_DELIVERY' }),
+      textResponse('Produced mixed-provider.md for independent review.'),
+      () => {
+        store.saveEmployee({ ...reviewer, revision: 2, provider: 'unavailable-provider', model: 'unavailable-model' }, 1)
+        return textResponse('Author provider independent opinion')
+      },
+    ])
+    const reviewerAdapter = new MockAdapter([
+      toolCallResponse('mixed-read', 'read', { file_path: artifact }),
+      toolCallResponse('mixed-verdict', 'structured_output', { criteria: [{ id: 'AC-1', status: 'pass',
+        notes: 'Read the artifact through the independent provider.', evidencePaths: [artifact] }] }),
+      textResponse('Reviewer provider independent opinion'),
+    ])
+    ctx.effect(() => ctx.llm.registerAdapter(['author-provider'], authorAdapter))
+    ctx.effect(() => ctx.llm.registerAdapter(['review-provider'], reviewerAdapter))
+    ctx.effect(() => ctx.tools.register(defineTool({ name: 'write_delivery', description: 'Write the fixture delivery.',
+      parameters: { content: { type: 'string', required: true } },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async (args) => { await writeFile(artifact, args.content); return artifact },
+    })))
+    ctx.effect(() => ctx.tools.register(defineTool({ name: 'read', description: 'Read the fixture artifact.',
+      parameters: { file_path: { type: 'string', required: true } },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }],
+        presentationMeta: args => ({ path: args.file_path }) },
+      execute: args => readFile(args.file_path, 'utf8'),
+    })))
+    const store = new MeetingStore(databasePath)
+    const author = store.saveEmployee({ id: brandString<EmployeeId>('mixed-author'), revision: 1,
+      name: 'Author', responsibility: 'Write the delivery.', provider: 'author-provider', model: 'author-model' }, 0)
+    const reviewer = store.saveEmployee({ ...author, id: brandString<EmployeeId>('mixed-reviewer'), name: 'Reviewer',
+      provider: 'review-provider', model: 'review-model' }, 0)
+    const team = store.saveTeam({ id: brandString<ProjectTeamId>('mixed-team'), revision: 1, name: 'Mixed providers',
+      memberIds: [author.id, reviewer.id] }, 0)
+    const plan = store.savePlan(projectPlanSchema.parse({ id: 'mixed-plan', revision: 1, goal: 'Mixed provider delivery',
+      background: [], team, employees: [author, reviewer], confirmed: false, tasks: [{ role: 'Author', employeeId: author.id,
+        instruction: 'Write mixed-provider.md using the tool.', acceptance: 'Contains MULTI_PROVIDER_DELIVERY',
+        review: { reviewerIds: [reviewer.id], release: 'automatic', artifactPaths: ['mixed-provider.md'], downstream: [],
+          criteria: [{ id: 'AC-1', description: 'Delivery marker', method: 'Read the file', expected: 'MULTI_PROVIDER_DELIVERY', evidence: 'mixed-provider.md' }] } }] }), 0)
+    store.confirmPlan(plan.id, 1)
+    const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('mixed-main'),
+      agentOptions: { provider: 'mock', model: 'main-model' } })
+    try {
+      await ctx.workingDirectory.set(caller.agent, directory)
+      await ctx.agentTeams.setEnabled(caller.agent, true)
+      caller.agent.session.append('turn/start', { turn: 1 })
+      const result = await ctx.tools.execute({ agent: caller.agent, signal: new AbortController().signal,
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>('mixed-execute'), name: 'project_execute',
+          arguments: JSON.stringify({ planId: plan.id, planRevision: 1 }) }] })
+      expect(result.results[0]?.result.isError).not.toBe(true)
+      expect(await readFile(artifact, 'utf8')).toBe('MULTI_PROVIDER_DELIVERY')
+      expect(authorAdapter.requests.map(request => [request.provider, request.model])).toEqual([
+        ['author-provider', 'author-model'], ['author-provider', 'author-model'],
+      ])
+      expect(reviewerAdapter.requests.map(request => [request.provider, request.model])).toEqual([
+        ['review-provider', 'review-model'], ['review-provider', 'review-model'],
+      ])
+      expect(mainAdapter.requests).toHaveLength(0)
+      expect(ctx.agentTeams.listTasks(caller.agent).map(task => task.status)).toEqual(['completed'])
+      const meeting = await ctx.meetingRoom.startMeeting({ requirement: 'Compare independent delivery opinions.', roles: [
+        { name: 'Author specialist', brief: 'Give an independent opinion.', employeeId: author.id },
+        { name: 'Review specialist', brief: 'Give an independent opinion.', employeeId: reviewer.id },
+      ] }, new AbortController().signal, caller.agent)
+      expect(meeting.rounds.map(round => round.output)).toEqual([
+        'Author provider independent opinion', 'Reviewer provider independent opinion',
+      ])
+      expect(authorAdapter.requests.at(-1)).toMatchObject({ provider: 'author-provider', model: 'author-model' })
+      expect(reviewerAdapter.requests.at(-1)).toMatchObject({ provider: 'review-provider', model: 'review-model' })
+      expect(JSON.stringify(reviewerAdapter.requests.at(-1))).not.toContain('Author provider independent opinion')
+      expect(JSON.stringify(reviewerAdapter.requests.at(-1))).toContain('review-provider')
+      expect(mainAdapter.requests).toHaveLength(0)
+      await expect(ctx.meetingRoom.startMeeting({ requirement: 'Reject missing employee before dispatch.', roles: [
+        { name: 'Existing', brief: 'Do not start.', employeeId: author.id },
+        { name: 'Missing', brief: 'Do not start.', employeeId: brandString<EmployeeId>('missing-provider-employee') },
+      ] }, new AbortController().signal, caller.agent)).rejects.toMatchObject({ code: 'MEETING_EMPLOYEE_MISSING' })
+      expect(authorAdapter.requests).toHaveLength(3)
+      expect(reviewerAdapter.requests).toHaveLength(3)
+      await expect(ctx.meetingRoom.startMeeting({ requirement: 'Do not substitute an unavailable route.', roles: [
+        { name: 'Unavailable reviewer', brief: 'Use only the selected route.', employeeId: reviewer.id },
+        { name: 'Must not start', brief: 'Wait for the reviewer.', employeeId: author.id },
+      ] }, new AbortController().signal, caller.agent)).rejects.toBeDefined()
+      expect(mainAdapter.requests).toHaveLength(0)
+      expect(authorAdapter.requests).toHaveLength(3)
+      expect(reviewerAdapter.requests).toHaveLength(3)
+    } finally { store.close(); await caller.dispose() }
+  })
   it('does not attach an upstream repair allowance to a blocked downstream task', async () => {
     const { ctx, store, plan, caller, execute } = await acceptanceFixture('automatic', {
       verdict: 'fail', reworkLimit: 2, repairVerdicts: ['pass'], downstreamReview: true,
