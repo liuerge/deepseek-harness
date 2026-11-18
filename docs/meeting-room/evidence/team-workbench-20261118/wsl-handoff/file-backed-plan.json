@@ -1,0 +1,17 @@
+{
+  "source": "Read-only verification of the actual main assistant plan association, disk file and Git history",
+  "originSessionId": "session-01aa85f2-528a-41e3-b8af-b912e9fe7943",
+  "planId": "ca9f9dd3-d8cf-4fff-afac-f8c013f1cc87",
+  "revision": 3,
+  "confirmed": false,
+  "document": {
+    "path": "/mnt/d/agentProjet/secops-triage/docs/project-plans/secops-team-delivery-plan.md",
+    "sha256": "92524c3daa4fa5a93f2299bd819e45b7ad91789e11c3e50fa248dc23c8293bb3",
+    "cwd": "/mnt/d/agentProjet/secops-triage"
+  },
+  "diskSha256": "92524c3daa4fa5a93f2299bd819e45b7ad91789e11c3e50fa248dc23c8293bb3",
+  "gitRoot": "/mnt/d/agentProjet/secops-triage",
+  "documentCommit": "aaab70c3b28e59fb05f66addc8ea6f277bf1b3e8",
+  "documentGitStatus": "",
+  "note": "This verifies planning and traceability; it does not establish development or n8n delivery acceptance."
+}

@@ -1,0 +1,24 @@
+阶段一统一结论（只读讨论，未写交付文件、未执行测试/命令、未启动服务；主助手按源码复核了员工关键主张）。
+
+【已核实事实】
+1. v020 冻结源（scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/）中没有 memory_context 接入点：全目录检索 memory/memory_context 零命中（主助手独立 grep 复核）；8 个控制节点的 prepare() 同构，上下文在 :231-262 组装、:263 序列化返回；:247-251 的 execution_records 去重是既有逻辑，不是 compact_investigation_context 的字符预算裁剪，二者不可互认。manifest.json:51 为 not_evaluated_unless_a_run_snapshot_matches。
+2. 裁剪 CLI 契约（packages/triage-memory/scripts/compact_investigation_context.py）：--input/--output；scope 强校验（evidence 的 tenant/scenario/case_id 与根一致；memory_context 需 tenant/scenario/scenario_version/source 且前三者与根一致，历史 case_id 可不同）；required 全文保留、optional 按 optional_excerpt_chars 截断或省略并保留原文 sha256；退出码 0=ok、2=budget_exceeded（仍写文件）、1=无效输入/写失败（open('x') 非原子、不覆盖）；输出 sort_keys 紧凑 JSON，output_chars==len。
+3. 测试基线：test_investigation_context.py 有 5 个测试方法；按源码逐行展开为 21 次 CLI 调用（6×exit0、1×exit2、14×exit1）。会议中测试角色的“19 次/12×exit1”为计数错误，本结论以 21 次为准。测试用 scenario=rasp，不覆盖 NDR/web，也不校验输出 schema。
+4. 契约缺口（本次只记录不修改）：上游 build_memory_context() 只产 schema_version/status/policy/retrieval_id/as_of/counts/similar_cases/error，不产 tenant/scenario/scenario_version/source；memory-context.schema.json 为 additionalProperties=false，且 policy const=reference_only_no_label_copy 与 constants.POLICY_VERSION=reference_only_no_label_copy/v1 不一致；旧实验 memory/context.json 的 scope 是手工补齐 fixture。故真实上游对象直接喂裁剪 CLI 会 exit 1。
+5. 既有实验（deployments/digital-team-context-20261117/）仅背景：WSL Ubuntu-24.04/Node 26/n8n 2.47.7/quickjs、每次 mktemp 新建 N8N_USER_FOLDER、import:workflow + execute --id --rawOutput；其流程依赖 bridge/模型路由，本交付不依赖模型适配器；其日志与 acceptance.json 不得顶替本次证据。
+6. 实施前阻塞：本会话 pwsh 在沙箱 provision 阶段失败（SetNamedSecurityInfoW Win32 5），命令全不可运行；文件读写工具正常。用户 2026-11-18 明确：不修复 ACL、不改系统权限、不使用 danger-full-access、不重试已拒绝命令；测试实施按 WSL 规划，须先验证支持命令执行的环境。
+
+【方案共识（本次计划采用）】
+- 交付目录仅 deployments/team-workbench-20261118/。T1 研发节点产出研究与接入说明、4 个合成 fixture、无外部模型/bridge/HTTP 的 n8n workflow、WSL 隔离运行脚本与只读校验器、source-hashes.json；T2 测试节点实际执行 WSL 前置校验、executeCommand 最小探针、聚焦测试、裁剪 CLI 三态与确定性/覆盖写验证、n8n import+execute，并保存原始输出、退出码与只增不删的失败记录。
+- memory_context 采用 envelope-only（四字段）作为裁剪输入，明确标注为合成注入的 scope 声明；完整检索对象只用于“历史参考”提示块、不进 evidence；本次不声称已完成真实端到端接通，契约缺口写入研究说明。
+- v020 与 packages/triage-memory 只读，不修改 current/生产/既有实验；不读 .env、密钥、真实告警、evidence/private/。
+- 每个节点由不同员工读取真实产物独立验收；全部标准通过才自动放行；证据不足或环境不支持命令执行则整体 blocked，不得用旧实验证据顶替。
+
+【未决/需用户方向】
+- 阶段二执行前命令执行环境是否可用（WSL 路径）需实测；不可用则测试节点只能 blocked，等用户处理环境后再执行，不自行提权或绕过。
+- 是否接受 envelope-only 与非端到端接通的结论口径；按当前约束，本次计划按此口径保存，用户确认计划即视为方向确认。
+- 交付目录内已有子会话探测残留空文件 deployments/team-workbench-20261118/.probe-write-check.tmp，当前会话无删除命令能力，待阶段二有可用命令环境时清理并在交付说明标注。
+
+- 按统一结论保存项目计划草稿：T1 研发研究与接入说明（含 fixtures/workflow/脚本/source-hashes），T2 测试执行与证据（WSL 前置校验、聚焦测试、裁剪三态、n8n 隔离合成流程、失败记录），每节点由不同员工独立验收、自动放行、证据不足阻塞；保存后引导用户在工作台检查并确认版本。
+- 用户确认计划后再启动；启动前先验证支持命令执行的环境（WSL 发行版、python3/node、n8n 可执行、executeCommand 最小探针），失败即记录 blocked 并上报，不修复 ACL、不改系统权限、不使用 danger-full-access、不重试已拒绝的命令。
+- 阶段二由研发员工清理 .probe-write-check.tmp 残留并在交付说明标注；测试证据只写入 deployments/team-workbench-20261118/，旧实验证据不得计入任何 passed。

@@ -55,6 +55,12 @@
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../team/agent-team"
+    },
+    {
+      "path": "../../client/ui-settings/tsconfig.client.json"
     }
   ]
 }

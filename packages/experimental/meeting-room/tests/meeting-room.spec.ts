@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { taskAcceptanceSchema, projectPlanSchema } from '../src/plans.ts'
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { observePlanDocument } from '../src/plan-document.ts'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -12,6 +14,7 @@ import { MeetingStore } from '../src/store.ts'
 import ApprovalService from '../../../interaction/user-approval/src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -19,7 +22,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse, toolCallResponse, maxTokensResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, assertSupportedJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { loadStoredSession } from '../../../subagent/subagent/tests/persistence-helpers.ts'
 import { mountLocalActivations } from '../../../subagent/subagent/tests/local-activation.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
@@ -27,6 +30,7 @@ import MeetingRoom, { Config } from '../src/index.ts'
 import type { EmployeeId, ProjectTeamId, ProjectExecutionId } from '../src/types.ts'
 import type {} from '../src/dashboard.ts'
 import type {} from '../src/roster-management.ts'
+import type {} from '../src/team-context.ts'
 import LocalFileSystem from '../../../fs/fs-local/src/index.ts'
 import TeamService from '@deepseek-ai/dsh-agent-team'
 import { linkProjectTeamTasks, teamTaskMarker } from '../src/team-link.ts'
@@ -47,6 +51,8 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0], optio
   const adapter = new MockAdapter(script)
   const directory = await mkdtemp(join(tmpdir(), 'meeting-room-'))
   directories.push(directory)
+  execFileSync('git', ['init', '--quiet', directory])
+  await writeFile(join(directory, 'plan.md'), '# Delivery plan\n')
   const databasePath = join(directory, 'meetings.sqlite')
   await ctx.plugin(LocalFileSystem, { cwd: directory })
   await mountAgentLoopTestDependencies(ctx)
@@ -75,6 +81,7 @@ function userText(content: readonly { type: string; text?: string }[]): string {
 /** Real files and logged read-tool results for acceptance and continuation tests. */
 async function acceptanceFixture(release: 'automatic' | 'human', options: {
   read?: boolean
+  submission?: 'missing' | 'duplicate' | 'empty-evidence'
   verdict?: 'pass' | 'fail'
   secondReviewer?: boolean
   reworkLimit?: number
@@ -83,14 +90,22 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
   downstreamVerdict?: 'pass' | 'fail'
   team?: boolean
   teamEnabled?: boolean
+  onAuthor?: () => void
   repairGate?: { entered: () => void; wait: Promise<void> } } = {}) {
   let artifact = ''
-  const script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('Author handoff')]
+  const script: ConstructorParameters<typeof MockAdapter>[0] = [() => {
+    options.onAuthor?.()
+    return textResponse('Author handoff')
+  }]
   for (let index = 0; index < (options.secondReviewer ? 2 : 1); index++) {
     if (options.read !== false) script.push(() => toolCallResponse(`read-${index}`, 'read', { file_path: artifact }))
-    script.push(() => toolCallResponse(`report-${index}`, 'structured_output', { criteria: [{
-      id: 'AC-1', status: options.verdict ?? 'pass', notes: 'Read the delivery specification and checked its content.', evidencePaths: [artifact],
-    }] }))
+    script.push(() => {
+      const criterion = { id: 'AC-1', status: options.verdict ?? 'pass',
+        notes: 'Read the delivery specification and checked its content.',
+        evidencePaths: options.submission === 'empty-evidence' ? [] : [artifact] }
+      return toolCallResponse(`report-${index}`, 'structured_output', { criteria:
+        options.submission === 'missing' ? [] : options.submission === 'duplicate' ? [criterion, criterion] : [criterion] })
+    })
   }
   for (const [attempt, verdict] of (options.repairVerdicts ?? []).entries()) {
     script.push(() => toolCallResponse(`repair-${attempt}`, 'repair', { content: `Repaired delivery ${attempt + 1}` }))
@@ -136,7 +151,7 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
   if (options.secondReviewer) reviewers.push(store.saveEmployee({ ...author, id: brandString<EmployeeId>('reviewer-2'), name: 'Second reviewer' }, 0))
   const team = store.saveTeam({ id: brandString<ProjectTeamId>('delivery-team'), revision: 1,
     name: 'Delivery team', memberIds: [author.id, ...reviewers.map(employee => employee.id)] }, 0)
-  const plan = store.savePlan(projectPlanSchema.parse({ id: 'delivery-plan', revision: 1, goal: 'Acceptance delivery',
+  const plan = store.savePlan(projectPlanSchema.parse({ document: await observePlanDocument(ctx, 'plan.md', directory, 4194304, new AbortController().signal), id: 'delivery-plan', revision: 1, goal: 'Acceptance delivery',
     background: [], team, employees: [author, ...reviewers], confirmed: false,
     tasks: [{ role: 'Author', employeeId: author.id, instruction: 'Produce delivery.md', acceptance: 'Content matches',
       review: { reviewerIds: reviewers.map(employee => employee.id), release, artifactPaths: ['delivery.md'], downstream: ['Approved delivery'],
@@ -159,6 +174,287 @@ async function acceptanceFixture(release: 'automatic' | 'human', options: {
 }
 
 describe('meeting room', () => {
+
+  it('restricts acceptance submissions to the confirmed criteria and canonical planned artifacts', async () => {
+    const { adapter, store, plan, caller, execute, artifact } = await acceptanceFixture('automatic')
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const planTool = adapter.requests[0]?.tools?.find(item => item.name === 'project_plan_save')
+      if (!planTool) throw new Error('Expected the real plan-save tool schema in the worker request')
+      await expect(JSON.stringify(planTool, null, 2) + '\n').toMatchFileSnapshot('expected/project-plan-save-schema.json')
+      const tool = adapter.requests[1]?.tools?.find(item => item.name === 'structured_output')
+      if (!tool) throw new Error('Expected the reviewer structured-output schema')
+      const schema = tool.parameters
+      assertSupportedJsonSchema(schema)
+      const criterion = { id: 'AC-1', status: 'pass', notes: 'Read and checked.', evidencePaths: [artifact] }
+      expect(validateJsonSchemaValue(schema, { criteria: [criterion] })).toEqual([])
+      for (const invalid of [
+        { ...criterion, id: 'other' },
+        { ...criterion, evidencePaths: ['delivery.md'] },
+        { ...criterion, evidencePaths: [join(artifact, 'unplanned.md')] },
+      ]) expect(validateJsonSchemaValue(schema, { criteria: [invalid] }).length).toBeGreaterThan(0)
+      const rendered = JSON.stringify(tool, null, 2).split(JSON.stringify(artifact)).join(JSON.stringify('<artifact>'))
+      await expect(rendered + '\n').toMatchFileSnapshot(join(import.meta.dirname, 'expected/acceptance-output-schema.json'))
+      expect(JSON.stringify(adapter.requests[1])).toContain('First use the read tool to inspect every listed artifact')
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('retains reviewer failure observations when required artifact reads are missing', async () => {
+    const { store, plan, caller, execute, artifact } = await acceptanceFixture('automatic', { read: false, verdict: 'fail' })
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const project = store.projectTimeline().at(-1)
+      if (!project) throw new Error('Expected a blocked project')
+      const history = store.execution(brandString<ProjectExecutionId>((JSON.parse(project.record) as { projectId: string }).projectId))
+      const report = history.at(-1)?.report
+      expect(report?.passed).toBe(false)
+      const criterion = report?.reviewers[0]?.criteria[0]
+      expect(criterion?.status).toBe('unverifiable')
+      expect(criterion?.notes).toContain('Artifacts without observed reads:')
+      expect(criterion?.notes).toContain(JSON.stringify([artifact]))
+      expect(criterion?.notes).toContain('Reviewer submitted fail: Read the delivery specification and checked its content.')
+      expect(history.some(entry => entry.index === 1)).toBe(false)
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it.each([
+    ['missing', 'Missing criterion IDs:'],
+    ['duplicate', 'Duplicate criterion IDs:'],
+    ['empty-evidence', 'No evidence paths submitted.'],
+  ] as const)('blocks acceptance with %s submissions after artifact reads', async (submission, diagnostic) => {
+    const { store, plan, caller, execute } = await acceptanceFixture('automatic', { submission })
+    try {
+      await execute({ planId: plan.id, planRevision: 1 })
+      const project = store.projectTimeline().at(-1)
+      if (!project) throw new Error('Expected a blocked project')
+      const record = JSON.parse(project.record) as { projectId: string }
+      const history = store.execution(brandString<ProjectExecutionId>(record.projectId))
+      const report = history.at(-1)?.report
+      expect(report?.passed).toBe(false)
+      expect(report?.reviewers[0]?.criteria[0]?.status).toBe('unverifiable')
+      expect(report?.reviewers[0]?.criteria[0]?.notes).toContain(diagnostic)
+      if (submission !== 'missing') expect(report?.reviewers[0]?.criteria[0]?.notes).toContain('Reviewer submitted pass:')
+      expect(history.some(entry => entry.index === 1)).toBe(false)
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('holds a Team-linked plan before its first worker when user input is already queued', async () => {
+    const { caller, execute, store, plan, adapter } = await acceptanceFixture('automatic', { team: true })
+    caller.agent.inbox.append('next-turn', createUserMessage({ content: [{ type: 'text', text: 'Review this direction first.' }],
+      source: { kind: 'user' } }))
+    try {
+      await execute({ planId: plan.id, planRevision: plan.revision })
+      const initial = store.projectTimeline().at(-1)
+      if (!initial) throw new Error('Expected a persisted checkpoint')
+      const paused = z.object({ projectId: z.string(), state: z.literal('awaiting-direction'), index: z.literal(0) })
+        .parse(JSON.parse(initial.record))
+      expect(adapter.requests).toHaveLength(0)
+      caller.agent.inbox.clear()
+      const resumed = await execute({ projectId: paused.projectId, expectedCheckpoint: initial.checkpoint })
+      expect(resumed.results[0]?.result.isError).toBe(false)
+      expect(adapter.requests).toHaveLength(4)
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('stops an inline execution for pending user direction without offering an unsupported continuation', async () => {
+    let queueDirection: () => void = () => { throw new Error('Caller must exist before its worker runs') }
+    const { ctx, adapter, databasePath } = await setup([() => { queueDirection(); return textResponse('First task produced') }])
+    const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('inline-direction'),
+      agentOptions: { provider: 'mock', model: 'mock' } })
+    queueDirection = () => { caller.agent.inbox.append('next-turn', createUserMessage({
+      content: [{ type: 'text', text: 'Change direction.' }], source: { kind: 'user' },
+    })) }
+    const store = new MeetingStore(databasePath)
+    try {
+      caller.agent.session.append('turn/start', { turn: 1 })
+      const task = { role: 'Author', instruction: 'Produce a handoff', acceptance: 'Inspect handoff' }
+      const result = await ctx.tools.execute({ agent: caller.agent, signal: new AbortController().signal, calls: [{
+        type: 'tool-call', id: brandString<ToolCallId>('inline-direction-run'), name: 'project_execute',
+        arguments: JSON.stringify({ goal: 'Inline delivery', tasks: [task, task] }),
+      }] })
+      expect(result.results[0]?.result.isError).toBe(false)
+      expect(JSON.stringify(result.results)).toContain('Inline execution stopped before the next task')
+      expect(JSON.parse(store.projectTimeline().at(-1)?.record ?? '{}')).toMatchObject({ state: 'interrupted', index: 1 })
+      expect(adapter.requests).toHaveLength(1)
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it.each(['next-turn', 'next-step'] as const)('yields before downstream dispatch for new main-conversation %s input and resumes without repeating work', async (target) => {
+    let queueDirection: () => void = () => { throw new Error('Caller must exist before its worker runs') }
+    const fixture = await acceptanceFixture('automatic', { onAuthor: () => { queueDirection() } })
+    const { caller, execute, store, plan, adapter } = fixture
+    const correction = createUserMessage({ content: [{ type: 'text', text: 'Check my new direction before the next task.' }],
+      source: { kind: 'user' } })
+    queueDirection = () => { caller.agent.inbox.append(target, correction) }
+    try {
+      const result = await execute({ planId: plan.id, planRevision: plan.revision })
+      expect(result.results[0]?.result.isError).toBe(false)
+      expect(JSON.stringify(result.results)).toContain('awaiting-direction')
+      const content = result.results[0]?.result.content
+      if (!content) throw new Error('Expected a project tool result')
+      const visible = z.object({ state: z.literal('awaiting-direction'), index: z.number(), message: z.string() })
+        .parse(JSON.parse(userText(content)))
+      expect(`${JSON.stringify(visible, null, 2)}\n`).toBe(await readFile(
+        new URL('./expected/project-awaiting-direction.json', import.meta.url), 'utf8'))
+      const records = (await fixture.ctx.projectDashboard.timeline(new AbortController().signal))
+      const latest = records.at(-1)
+      expect(latest).toMatchObject({ state: 'awaiting-direction', index: 1 })
+      expect(adapter.requests).toHaveLength(3)
+      expect(records.filter(record => record.state === 'task-produced').map(record => record.index)).toEqual([0])
+      expect([...caller.agent.inbox.nextTurn, ...caller.agent.inbox.nextStep]).toContainEqual(correction)
+      if (!latest) throw new Error('Expected a persisted direction checkpoint')
+      const retained = new MeetingStore(fixture.databasePath)
+      try { expect(retained.execution(brandString<ProjectExecutionId>(latest.projectId)).at(-1)).toMatchObject({ state: 'awaiting-direction', index: 1 }) }
+      finally { retained.close() }
+      const premature = await execute({ projectId: latest.projectId, expectedCheckpoint: latest.checkpoint })
+      expect(JSON.stringify(premature.results)).toContain('PROJECT_DIRECTION_PENDING')
+      expect(store.execution(brandString<ProjectExecutionId>(latest.projectId)).at(-1)?.checkpoint).toBe(latest.checkpoint)
+      expect(adapter.requests).toHaveLength(3)
+      caller.agent.inbox.clear()
+      const resumed = await execute({ projectId: latest.projectId, expectedCheckpoint: latest.checkpoint })
+      expect(resumed.results[0]?.result.isError).toBe(false)
+      expect(adapter.requests).toHaveLength(4)
+      expect(store.execution(brandString<ProjectExecutionId>(latest.projectId)).filter(record => record.state === 'task-produced').map(record => record.index))
+        .toEqual([0, 1])
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('refuses an awaiting-direction continuation after the confirmed plan is revised', async () => {
+    let queueDirection: () => void = () => { throw new Error('Caller must exist before its worker runs') }
+    const { ctx, caller, execute, store, plan, adapter } = await acceptanceFixture('automatic', { onAuthor: () => { queueDirection() } })
+    queueDirection = () => { caller.agent.inbox.append('next-turn', createUserMessage({
+      content: [{ type: 'text', text: 'Change the delivery direction.' }], source: { kind: 'user' },
+    })) }
+    try {
+      await execute({ planId: plan.id, planRevision: plan.revision })
+      const latest = (await ctx.projectDashboard.timeline(new AbortController().signal)).at(-1)
+      if (!latest) throw new Error('Expected a persisted direction checkpoint')
+      caller.agent.inbox.clear()
+      store.savePlan({ ...plan, revision: 2, goal: 'Revised delivery', confirmed: false }, 1)
+      const result = await execute({ projectId: latest.projectId, expectedCheckpoint: latest.checkpoint })
+      expect(result.results[0]?.result.isError).toBe(true)
+      expect(JSON.stringify(result.results)).toContain('PROJECT_PLAN_STALE')
+      expect(adapter.requests).toHaveLength(3)
+      expect(store.execution(brandString<ProjectExecutionId>(latest.projectId)).at(-1)?.state).toBe('awaiting-direction')
+    } finally { store.close(); await caller.dispose() }
+  })
+
+  it('refuses a roster change from another connection between choosing and saving team defaults', async () => {
+    const { ctx, databasePath, adapter } = await setup([])
+    const other = new MeetingStore(databasePath)
+    const employee = other.saveEmployee({ id: brandString<EmployeeId>('racing-selection-employee'), revision: 1,
+      name: 'Employee', responsibility: 'Deliver files.', provider: 'mock', model: 'before' }, 0)
+    const team = other.saveTeam({ id: brandString<ProjectTeamId>('racing-selection-team'), revision: 1,
+      name: 'Team', memberIds: [employee.id] }, 0)
+    const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('racing-selection-main'),
+      agentOptions: { provider: 'mock', model: 'mock' } })
+    // oxlint-disable-next-line typescript/unbound-method -- call() supplies the actual store receiver inside the prototype spy.
+    const save = MeetingStore.prototype.saveSessionTeam
+    vi.spyOn(MeetingStore.prototype, 'saveSessionTeam').mockImplementationOnce(function (this: MeetingStore, id, selection, revision) {
+      other.saveEmployee({ ...employee, revision: 2, model: 'changed-before-commit' }, 1)
+      return save.call(this, id, selection, revision)
+    })
+    try {
+      expect(() => ctx.projectTeamContext.select(caller.agent.session, { expectedRevision: 0, teamId: team.id,
+        teamRevision: 1, employees: [{ id: employee.id, revision: 1 }] }, new AbortController().signal))
+        .toThrow(expect.objectContaining({ code: 'PROJECT_TEAM_SELECTION_ROSTER_STALE' }))
+      expect(other.sessionTeam(caller.agent.session.id)).toBeNull()
+      expect(adapter.requests).toHaveLength(0)
+    } finally { other.close(); await caller.dispose() }
+  })
+
+  it('keeps a child with no active parent usable without applying main-conversation team preferences', async () => {
+    const { ctx, adapter } = await setup([textResponse('Independent child request')])
+    const orphan = await ctx.agents.create({ sessionId: brandString<SessionId>('independent-selection-child'),
+      meta: { origin: 'subagent' }, agentOptions: { provider: 'mock', model: 'mock' } })
+    try {
+      expect(() => ctx.projectTeamContext.current(orphan.agent.session, new AbortController().signal))
+        .toThrow(expect.objectContaining({ code: 'PROJECT_TEAM_SELECTION_MAIN_REQUIRED' }))
+      orphan.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the assigned task.' }],
+        source: { kind: 'user' } }))
+      await orphan.agent.whenIdle()
+      expect(adapter.requests).toHaveLength(1)
+      expect(JSON.stringify(adapter.requests[0])).not.toContain('Selected project team for planning')
+    } finally { await orphan.dispose() }
+  })
+
+  it('retains exact conversation team defaults, logs model context and isolates workers before explicit clearing', async () => {
+    const { ctx, databasePath, adapter } = await setup([
+      textResponse('Main planning context observed'), textResponse('Independent employee context'), textResponse('Cleared defaults observed'),
+    ])
+    const store = new MeetingStore(databasePath)
+    const employee = store.saveEmployee({ id: brandString<EmployeeId>('selection-employee'), revision: 1,
+      name: 'SELECTED_EMPLOYEE', responsibility: 'Prepare deliverables.', provider: 'worker-vendor', model: 'worker-model' }, 0)
+    const team = store.saveTeam({ id: brandString<ProjectTeamId>('selection-team'), revision: 1,
+      name: 'SELECTED_TEAM', memberIds: [employee.id] }, 0)
+    const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('selected-main'),
+      agentOptions: { provider: 'mock', model: 'main-model' } })
+    const other = await ctx.agents.create({ sessionId: brandString<SessionId>('other-selection-main'),
+      agentOptions: { provider: 'mock', model: 'main-model' } })
+    const signal = new AbortController().signal
+    const choice = { expectedRevision: 0, teamId: team.id, teamRevision: 1, employees: [{ id: employee.id, revision: 1 }] }
+    try {
+      const selection = await ctx.projectTeamContext.select(caller.agent.session, choice, signal)
+      expect(selection).toMatchObject({ revision: 1, team, employees: [employee] })
+      expect(adapter.requests).toHaveLength(0)
+      expect(store.plans()).toEqual([])
+      expect(store.projectTimeline()).toEqual([])
+      expect(await ctx.projectTeamContext.current(other.agent.session, signal)).toEqual({ revision: 0, team: null, employees: [] })
+      expect(() => ctx.projectTeamContext.select(caller.agent.session, choice, signal))
+        .toThrow(expect.objectContaining({ code: 'PROJECT_TEAM_SELECTION_STALE' }))
+      const reopened = new MeetingStore(databasePath)
+      try { expect(reopened.sessionTeam(caller.agent.session.id)).toEqual(selection) }
+      finally { reopened.close() }
+      store.saveEmployee({ ...employee, revision: 2, model: 'changed-after-selection' }, 1)
+      expect((await ctx.projectTeamContext.current(caller.agent.session, signal)).employees[0]?.model).toBe('worker-model')
+      expect(() => ctx.projectTeamContext.select(caller.agent.session, { ...choice, expectedRevision: 1 }, signal))
+        .toThrow(expect.objectContaining({ code: 'PROJECT_TEAM_SELECTION_ROSTER_STALE' }))
+      caller.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Prepare a plan using the selected defaults.' }],
+        source: { kind: 'user' } }))
+      await caller.agent.whenIdle()
+      expect(adapter.requests[0]).toMatchObject({ provider: 'mock', model: 'main-model' })
+      const logged = caller.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+        && event.data.source.kind === 'runtime-context')
+      expect(JSON.stringify(logged.at(-1))).toContain('SELECTED_TEAM')
+      expect(JSON.stringify(logged.at(-1))).toContain('worker-model')
+      for (const instruction of ['meeting_start', 'employeeId', 'meeting_record_decision', 'project_plan_save',
+        'project_execute', 'project_records', 'testing assignment', 'command tools', 'user correction']) {
+        expect(JSON.stringify(logged.at(-1))).toContain(instruction)
+      }
+      expect(JSON.stringify(logged.at(-1))).not.toContain('changed-after-selection')
+      const context = logged.at(-1)
+      if (context?.type !== 'user/message') throw new Error('Expected a logged runtime context')
+      await expect(userText(context.data.content)).toMatchFileSnapshot(join(import.meta.dirname, 'expected/session-team-context.txt'))
+      let descendantRefused = false
+      const stopCheck = ctx.on('agent/pre-step', async (payload, next) => {
+        if (payload.agent !== caller.agent && ctx.subagents.rootOf(payload.agent) === caller.agent) {
+          expect(() => ctx.projectTeamContext.select(payload.agent.session, { ...choice, expectedRevision: 1 }, signal))
+            .toThrow(expect.objectContaining({ code: 'PROJECT_TEAM_SELECTION_MAIN_REQUIRED' }))
+          descendantRefused = true
+        }
+        return next()
+      })
+      const child = await ctx.subagents.startActivation({ provider: 'meeting-test-spawn', parent: caller.agent,
+        label: 'Independent employee', prompt: [{ type: 'text', text: 'Only perform the assigned task.' }], signal, delivery: 'caller' })
+      try {
+        expect((await child.result).stopReason).toBe('completed')
+        expect(descendantRefused).toBe(true)
+        expect(JSON.stringify(adapter.requests[1])).not.toContain('SELECTED_TEAM')
+      } finally { await child.dispose(); stopCheck() }
+      const cleared = await ctx.projectTeamContext.select(caller.agent.session, {
+        expectedRevision: 1, teamId: null, teamRevision: null, employees: [],
+      }, signal)
+      expect(cleared).toEqual({ revision: 2, team: null, employees: [] })
+      caller.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue without a default team.' }],
+        source: { kind: 'user' } }))
+      await caller.agent.whenIdle()
+      const clearedContext = caller.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+        && event.data.source.kind === 'runtime-context').at(-1)
+      expect(JSON.stringify(clearedContext)).toContain('no default team is selected')
+      expect(JSON.stringify(clearedContext)).not.toContain('SELECTED_TEAM')
+    } finally { store.close(); await other.dispose(); await caller.dispose() }
+  })
+
   it('rejects catalog deadlines outside the supported timer range at configuration parsing', () => {
     expect(() => Config.parse({ modelCatalogTimeoutMs: 4_294_967_296 })).toThrow()
     expect(() => Config.parse({ modelCatalogTimeoutMs: 0 })).toThrow()
@@ -247,7 +543,7 @@ describe('meeting room', () => {
       provider: 'review-provider', model: 'review-model' }, 0)
     const team = store.saveTeam({ id: brandString<ProjectTeamId>('mixed-team'), revision: 1, name: 'Mixed providers',
       memberIds: [author.id, reviewer.id] }, 0)
-    const plan = store.savePlan(projectPlanSchema.parse({ id: 'mixed-plan', revision: 1, goal: 'Mixed provider delivery',
+    const plan = store.savePlan(projectPlanSchema.parse({ document: await observePlanDocument(ctx, 'plan.md', directory, 4194304, new AbortController().signal), id: 'mixed-plan', revision: 1, goal: 'Mixed provider delivery',
       background: [], team, employees: [author, reviewer], confirmed: false, tasks: [{ role: 'Author', employeeId: author.id,
         instruction: 'Write mixed-provider.md using the tool.', acceptance: 'Contains MULTI_PROVIDER_DELIVERY',
         review: { reviewerIds: [reviewer.id], release: 'automatic', artifactPaths: ['mixed-provider.md'], downstream: [],
@@ -632,7 +928,7 @@ describe('meeting room', () => {
   })
 
   it.each(['human', 'automatic'])('retains legacy %s acceptance without artifact paths while stopping downstream work', async (release) => {
-    const { ctx, databasePath, adapter } = await setup([textResponse('Produced artifact with checks')])
+    const { ctx, databasePath, adapter, directory } = await setup([textResponse('Produced artifact with checks')])
     const store = new MeetingStore(databasePath)
     const author = store.saveEmployee({ id: brandString<EmployeeId>('acceptance-author'), revision: 1,
       name: 'Author', responsibility: 'Produce the artifact.', provider: 'mock', model: 'mock' }, 0)
@@ -641,6 +937,7 @@ describe('meeting room', () => {
       name: 'Acceptance team', memberIds: [author.id, reviewer.id] }, 0)
     const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('acceptance-caller'),
       agentOptions: { provider: 'mock', model: 'mock' } })
+    await ctx.workingDirectory.set(caller.agent, directory)
     let sequence = 0
     const execute = (name: string, args: object) => ctx.tools.execute({ agent: caller.agent,
       signal: new AbortController().signal, calls: [{ type: 'tool-call', id: brandString<ToolCallId>(`acceptance-${++sequence}`),
@@ -663,7 +960,7 @@ describe('meeting room', () => {
         expect((await execute('project_plan_save', { ...draft, tasks: [{ ...task, review: { artifactPaths: ['offline-check.md'], ...invalid } }] })).results[0]?.result.isError).toBe(true)
       }
       expect(store.plans()).toEqual([])
-      store.savePlan(projectPlanSchema.parse({ ...draft, id: 'legacy-acceptance-plan', revision: 1, confirmed: false, team, employees: [author, reviewer] }), 0)
+      store.savePlan(projectPlanSchema.parse({ ...draft, document: await observePlanDocument(ctx, 'plan.md', directory, 4194304, new AbortController().signal), id: 'legacy-acceptance-plan', revision: 1, confirmed: false, team, employees: [author, reviewer] }), 0)
       const plan = store.plans()[0]
       if (!plan) throw new Error('Expected acceptance plan')
       expect(plan.employees.map(employee => employee.id)).toContain(reviewer.id)
@@ -688,21 +985,43 @@ describe('meeting room', () => {
     finally { reopened.close() }
   })
 
+  it('keeps legacy plans readable and rejects absent or changed disk documents before confirmation and dispatch', async () => {
+    const { ctx, store, plan, caller, execute, directory, adapter } = await acceptanceFixture('automatic')
+    const signal = new AbortController().signal
+    try {
+      const legacy = store.savePlan({ ...plan, revision: 2, document: undefined, confirmed: false }, 1)
+      expect(store.plans().some(item => item.revision === 2)).toBe(true)
+      await expect(ctx.projectDashboard.confirmPlan(legacy.id, 2, signal)).rejects.toMatchObject({ code: 'PROJECT_PLAN_DOCUMENT_MISSING' })
+      store.confirmPlan(legacy.id, 2)
+      expect(JSON.stringify((await execute({ planId: legacy.id, planRevision: 2 })).results)).toContain('PROJECT_PLAN_DOCUMENT_MISSING')
+      const revised = store.savePlan({ ...plan, revision: 3, confirmed: false }, 2)
+      await writeFile(join(directory, 'plan.md'), '# Changed requirements\n')
+      await expect(ctx.projectDashboard.confirmPlan(revised.id, 3, signal)).rejects.toMatchObject({ code: 'PROJECT_PLAN_DOCUMENT_STALE' })
+      store.confirmPlan(revised.id, 3)
+      expect(JSON.stringify((await execute({ planId: revised.id, planRevision: 3 })).results)).toContain('PROJECT_PLAN_DOCUMENT_STALE')
+      expect(adapter.requests).toHaveLength(0)
+      await expect(observePlanDocument(ctx, '../outside.md', directory, 4194304, signal)).rejects.toBeDefined()
+      await rm(join(directory, '.git'), { recursive: true })
+      await expect(observePlanDocument(ctx, 'plan.md', directory, 4194304, signal)).rejects.toMatchObject({ code: 'PROJECT_PLAN_GIT_REQUIRED' })
+    } finally { await caller.dispose(); store.close() }
+  })
+
   it('runs a user-confirmed plan once with its captured employees and sourced background, retaining edited versions', async () => {
-    const { ctx, databasePath, adapter } = await setup([textResponse('Plan delivery')])
+    const { ctx, databasePath, adapter, directory } = await setup([textResponse('Plan delivery')])
     const store = new MeetingStore(databasePath)
     const employee = store.saveEmployee({ id: brandString<EmployeeId>('plan-employee'), revision: 1, name: 'Plan employee',
       responsibility: 'Use the confirmed background.', provider: 'mock', model: 'mock' }, 0)
     const team = store.saveTeam({ id: brandString<ProjectTeamId>('plan-team'), revision: 1,
       name: 'Plan team', memberIds: [employee.id] }, 0)
     const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('plan-caller'), agentOptions: { provider: 'mock', model: 'mock' } })
+    await ctx.workingDirectory.set(caller.agent, directory)
     let sequence = 0
     const execute = (name: string, args: object) => ctx.tools.execute({ agent: caller.agent,
       signal: new AbortController().signal, calls: [{ type: 'tool-call', id: brandString<ToolCallId>(`plan-call-${++sequence}`),
         name, arguments: JSON.stringify(args) }] })
     try {
       caller.agent.session.append('turn/start', { turn: 1 })
-      const draft = { expectedRevision: 0, goal: 'Deliver confirmed content', teamId: team.id,
+      const draft = { documentPath: 'plan.md', expectedRevision: 0, goal: 'Deliver confirmed content', teamId: team.id,
         background: [{ title: 'Product decision', source: 'decision-42', content: 'The product must support offline review.' }],
         tasks: [{ role: 'Product', employeeId: employee.id, instruction: 'Write the specification', acceptance: 'Include offline review' }] }
       expect((await execute('project_plan_save', draft)).results[0]?.result.isError).toBe(false)
@@ -766,7 +1085,7 @@ describe('meeting room', () => {
       expect(store.projectRecords('old-session', 1)).toEqual(['{"state":"awaiting-review"}'])
     } finally { store.close() }
     const database = new DatabaseSync(path)
-    try { expect(database.prepare('PRAGMA user_version').get()?.['user_version']).toBe(5) }
+    try { expect(database.prepare('PRAGMA user_version').get()?.['user_version']).toBe(6) }
     finally { database.close() }
   })
 

@@ -29,15 +29,17 @@ export const acceptanceReportSchema = z.object({
   })),
 })
 
-const resultSchema: ObjectJsonSchema = {
-  type: 'object', additionalProperties: false, required: ['criteria'], properties: {
-    criteria: { type: 'array', items: { type: 'object', additionalProperties: false,
-      required: ['id', 'status', 'notes', 'evidencePaths'], properties: {
-        id: { type: 'string' }, status: { type: 'string', enum: ['pass', 'fail', 'unverifiable'] },
-        notes: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' } },
-      },
-    } },
-  },
+function resultSchema(ids: string[], paths: string[]): ObjectJsonSchema {
+  return {
+    type: 'object', additionalProperties: false, required: ['criteria'], properties: {
+      criteria: { type: 'array', items: { type: 'object', additionalProperties: false,
+        required: ['id', 'status', 'notes', 'evidencePaths'], properties: {
+          id: { type: 'string', enum: ids }, status: { type: 'string', enum: ['pass', 'fail', 'unverifiable'] },
+          notes: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string', enum: paths } },
+        },
+      } },
+    },
+  }
 }
 
 /**
@@ -122,7 +124,8 @@ export async function reviewTask(ctx: Context, config: Config, parent: Agent, pl
       const activation = await ctx.subagents.startActivation({
         provider: config.provider, parent, cwd, signal, delivery: 'caller', label: employee.name,
         agentOptions: { provider: employee.provider, model: employee.model },
-        ...(employee.preset === undefined ? {} : { agentPreset: employee.preset }), outputSchema: resultSchema,
+        ...(employee.preset === undefined ? {} : { agentPreset: employee.preset }),
+        outputSchema: resultSchema(review.criteria.map(criterion => criterion.id), artifacts.map(artifact => artifact.path)),
         prompt: [{ type: 'text', text: [
           `Independently review task ${index + 1} of confirmed plan ${plan.id}, revision ${plan.revision}.`,
           `Project goal\n${plan.goal}\nBackground sources\n${JSON.stringify(plan.background)}`,
@@ -130,7 +133,10 @@ export async function reviewTask(ctx: Context, config: Config, parent: Agent, pl
           `Task and preconfirmed acceptance requirements\n${JSON.stringify(task)}`,
           `Author handoff, unverified project material\n${handoff}`,
           `Host-observed artifact versions\n${JSON.stringify(artifacts)}`,
-          'Use the read tool to inspect the actual artifacts, then perform each required check with available tools. Do not change delivery artifacts. Submit every criterion exactly once. Use the canonical artifact paths above as evidencePaths. A missing check or unavailable evidence is unverifiable, never pass. Report observations and checks actually performed in notes.',
+          'First use the read tool to inspect every listed artifact, then perform each required check with available tools.',
+          'Do not change delivery artifacts. Submit every criterion exactly once.',
+          'evidencePaths must contain only canonical artifact.path values from the host-observed list. Source references outside that list may be described in notes.',
+          'A missing check or unavailable evidence is unverifiable, never pass. Report observations and checks actually performed in notes.',
         ].join('\n\n') }],
       })
       try {
@@ -147,17 +153,29 @@ export async function reviewTask(ctx: Context, config: Config, parent: Agent, pl
           if (!captured.success) throw new HarnessError('Acceptance reviewer returned an invalid structured report.', 'PROJECT_ACCEPTANCE_INVALID')
           const submitted = captured.data
           const observed = reads.get(activation.childId) ?? new Set<string>()
-          const validIds = submitted.criteria.length === review.criteria.length
-            && new Set(submitted.criteria.map(item => item.id)).size === review.criteria.length
-            && submitted.criteria.every(item => review.criteria.some(criterion => criterion.id === item.id))
+          const counts = new Map<string, number>()
+          for (const item of submitted.criteria) counts.set(item.id, (counts.get(item.id) ?? 0) + 1)
+          const diagnostics: string[] = []
+          const missing = review.criteria.filter(item => !counts.has(item.id)).map(item => item.id)
+          const duplicates = [...counts].filter(([, count]) => count > 1).map(([id]) => id)
+          const unknown = [...counts.keys()].filter(id => !review.criteria.some(item => item.id === id))
+          const unread = artifacts.filter(artifact => !observed.has(artifact.path)).map(artifact => artifact.path)
+          if (missing.length) diagnostics.push(`Missing criterion IDs: ${JSON.stringify(missing)}.`)
+          if (duplicates.length) diagnostics.push(`Duplicate criterion IDs: ${JSON.stringify(duplicates)}.`)
+          if (unknown.length) diagnostics.push(`Unknown criterion IDs: ${JSON.stringify(unknown)}.`)
+          if (unread.length) diagnostics.push(`Artifacts without observed reads: ${JSON.stringify(unread)}.`)
           const criteria = review.criteria.map((criterion) => {
-            const item = submitted.criteria.find(entry => entry.id === criterion.id)
+            const items = submitted.criteria.filter(entry => entry.id === criterion.id)
+            const item = items[0]
             const evidence = item?.evidencePaths.filter(path =>
               observed.has(path) && artifacts.some(artifact => artifact.path === path)) ?? []
-            if (!validIds || !item || !artifacts.every(artifact => observed.has(artifact.path))
-              || evidence.length === 0 || evidence.length !== item.evidencePaths.length) {
+            const issues = [...diagnostics]
+            const invalid = item?.evidencePaths.filter(path => !artifacts.some(artifact => artifact.path === path)) ?? []
+            if (invalid.length) issues.push(`Evidence paths outside the planned canonical artifacts: ${JSON.stringify(invalid)}.`)
+            if (item && item.evidencePaths.length === 0) issues.push('No evidence paths submitted.')
+            if (issues.length || !item || evidence.length !== item.evidencePaths.length) {
               return { id: criterion.id, status: 'unverifiable' as const,
-                notes: 'Criterion submission is missing, duplicated, or lacks observed artifact reads.', evidencePaths: evidence }
+                notes: [...issues, ...items.map(entry => `Reviewer submitted ${entry.status}: ${entry.notes}`)].join(' '), evidencePaths: evidence }
             }
             return { ...item, evidencePaths: evidence }
           })

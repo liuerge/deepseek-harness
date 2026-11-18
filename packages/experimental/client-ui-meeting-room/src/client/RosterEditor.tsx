@@ -13,6 +13,7 @@ export interface RosterEditorProps {
   connectionsLoading: boolean
   connectionsFailed: boolean
   loading: boolean
+  openModelSettings?: (() => void) | undefined
   saveEmployee: (input: EmployeeSaveInput) => Promise<boolean>
   saveTeam: (input: TeamSaveInput) => Promise<boolean>
   delegateTeam: (id: string) => void
@@ -25,7 +26,7 @@ export interface RosterEditorProps {
  * @returns Forms that retain user input on failure and do not start model work when saving.
  */
 export function RosterEditor({ employees, teams, connections, connectionsLoading, connectionsFailed,
-  loading, saveEmployee, saveTeam, delegateTeam, t }: RosterEditorProps) {
+  loading, openModelSettings, saveEmployee, saveTeam, delegateTeam, t }: RosterEditorProps) {
   const [employee, setEmployee] = useState<EmployeeSaveInput | undefined>()
   const [team, setTeam] = useState<TeamSaveInput | undefined>()
   const [pending, setPending] = useState<'employee' | 'team' | undefined>()
@@ -87,8 +88,13 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
         <datalist id={modelList}>{connection?.models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</datalist>
         </label>
       </div>
-      {!connectionsLoading && (connections.length === 0 || (employee.provider && !connection))
+      {openModelSettings && <div className={css.actions}>
+        <Button disabled={!!pending} onClick={openModelSettings}>{t('roster.model-settings')}</Button>
+      </div>}
+      {!connectionsLoading && connections.length === 0
         && <p role="alert">{t('roster.no-connections')}</p>}
+      {!connectionsLoading && connections.length > 0 && employee.provider && !connection
+        && <p role="alert">{t('roster.connection-missing')}</p>}
       {connection?.failed && <p role="alert">{t('roster.catalog-failed')}</p>}
       <p className={css.hint}>{t('roster.model-hint')}</p>
       <label>{t('roster.preset')}<Input value={employee.preset ?? ''} disabled={!!pending}

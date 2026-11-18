@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/meeting-room-acceptance/guide.md
 /:
-  en: ec100cb9eced7031
-  zh: 23c2555a723e112b
+  en: 6d9ef3d4b95010e2
+  zh: 302a80c307d7220a
 /meeting-room-acceptance-services:
   en: fbdcb088644107b9
   zh: bc2d1e94ca683a74
 /meeting-room-acceptance-services/change:
-  en: 7577fcabe1bfd1aa
-  zh: e24c237cbc2117e6
+  en: 1e8eff6103874cf7
+  zh: 3c53403b7389dfde
 /meeting-room-acceptance-services/migration:
-  en: 8156d7de190e3614
-  zh: 7de3cf80672d0482
+  en: bba78dc6d60f207b
+  zh: c350e1c20169bed1

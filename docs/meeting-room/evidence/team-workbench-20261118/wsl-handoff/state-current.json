@@ -1,0 +1,13 @@
+{
+  "source": "Read-only export of formal WSL DSH project plan records",
+  "mainSessionId": "session-01aa85f2-528a-41e3-b8af-b912e9fe7943",
+  "planId": "ca9f9dd3-d8cf-4fff-afac-f8c013f1cc87",
+  "revision": 1,
+  "confirmed": true,
+  "started": true,
+  "projectId": "1a9f2132-054c-4fbf-9b60-95564cbb89a4",
+  "latestState": "acceptance-blocked",
+  "checkpoints": 9,
+  "planSha256": "4b56bd374cf7844e85f3e07c23de6dd4af1026f1d492ff68d30896fe9cd9fc15",
+  "note": "This record does not establish employee execution or n8n acceptance."
+}

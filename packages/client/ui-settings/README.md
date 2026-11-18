@@ -78,6 +78,8 @@ The provider owns one controller per Host entry, including its subscription and 
 
 -----
 
+The mounted settings shell provides `ctx.settingsNavigation.open(sectionId)` for feature links into a registered section. An unavailable section is rejected without changing the dialog selection; the capability is removed with the shell. [ui-settings-general](../ui-settings-general/README.md) owns the presentation.
+
 <a id="further-exploration"></a>
 ## Further Exploration
 

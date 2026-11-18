@@ -185,8 +185,10 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  settingsNavigation: 'client-side interface-typed settings navigation — packages/client/ui-settings/README.md owns the API',
   projectDashboard: 'experimental authenticated project Remote internal to meeting-room — packages/experimental/meeting-room/README.md owns its behavior',
   projectRoster: 'experimental authenticated roster Remote internal to meeting-room — packages/experimental/meeting-room/README.md owns its behavior',
+  projectTeamContext: 'experimental conversation team defaults Remote internal to meeting-room — packages/experimental/meeting-room/README.md owns its behavior',
   timeline: 'experimental session data service internal to the bundle — packages/experimental/timeline/README.md owns its behavior',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',

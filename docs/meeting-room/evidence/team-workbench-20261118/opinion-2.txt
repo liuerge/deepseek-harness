@@ -1,0 +1,23 @@
+测试与验收角色意见已完成并发送给主助手。以下是核心结论摘要：
+
+## 实际读到的关键事实
+
+**裁剪测试** `packages/triage-memory/tests/test_investigation_context.py`：5 个 test 方法，但展开后是 **19 次 CLI 调用**（12×exit 1 + 1×exit 2 + 6×exit 0）。README 和 `docs/当前基线.md` 写的"5 项"是方法数口径 —— 复核人按 5 项核对会误判少测，建议统一口径。
+
+**退出码语义**（源码实测）：exit 0 = status `ok`；exit 2 = `budget_exceeded` 且**输出文件仍然写出**；exit 1 = 无效输入，**不写输出文件**。调用方必须 exit code + status 双判，不能靠"文件存在"。
+
+**n8n CLI 形态**：`import:workflow --input=` + `execute --id --rawOutput`，`N8N_USER_FOLDER=$(mktemp -d ...)` 隔离，`N8N_EXPRESSION_ENGINE=quickjs` 为本机必需。
+
+## 三个最重要的发现
+
+1. **本会话命令执行被 Windows ACL 阻塞（已实测）**：连 `Write-Output` 都失败，报 `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\agentProjet\secops-triage)`，与 cwd 无关 —— 沙箱在 provision 阶段就失败了。文件读写工具正常，但**一切命令都不通**，阶段二若不解决只能判 blocked。
+
+2. **memory_context 契约缺口**：裁剪 CLI 强制要求 `tenant/scenario/scenario_version/source`，但上游 `build_memory_context()` **根本不产出**这四个字段，`memory-context.schema.json` 还是 `additionalProperties: false`。旧实验的 `memory/context.json` 是**手工补齐的 fixture**。直接用真实上游 memory_context 会 exit 1。
+
+3. **方案要换节点**：新流程必须用 `executeCommand` 跑本地 Python 裁剪 CLI + `readWriteFile` 读回 + `if` 分流，**去掉 httpRequest/bridge/模型**。但 executeCommand 的 cwd 与参数名需先用最小探针 workflow 实跑确认，且输出路径必须唯一（CLI 用 `open('x')`，路径已存在必然 exit 1）。
+
+## 验收纪律
+
+三态 `passed / blocked / failed` 分明区分 —— 前置未满足写 blocked，真实执行但不达标写 failed。未执行的步骤必须写 `"executed": false` + reason。旧实验证据只作背景参考，**不计入本次任何一条 passed**。
+
+⚠️ 残留物：探测写权限时在 `deployments/team-workbench-20261118/` 留下空文件 `.probe-write-check.tmp`（命令被阻断无法删除），阶段二前需清理。

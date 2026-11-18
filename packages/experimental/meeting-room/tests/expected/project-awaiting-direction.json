@@ -1,0 +1,5 @@
+{
+  "state": "awaiting-direction",
+  "index": 1,
+  "message": "New user input is waiting in the main conversation. No next task was dispatched. End this response so the main assistant can process that input. Inspect project_records afterward; continue this exact checkpoint only if the confirmed plan is unchanged, otherwise save and confirm a revised plan."
+}

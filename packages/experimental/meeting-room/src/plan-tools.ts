@@ -1,5 +1,7 @@
 /** Model-visible draft planning with sourced background and user-owned confirmation. */
 import { randomUUID } from 'node:crypto'
+import type {} from '@deepseek-ai/dsh-working-directory'
+import { observePlanDocument } from './plan-document.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
@@ -11,8 +13,9 @@ import type { MeetingStore } from './store.ts'
  * Register plan drafting and reading tools; user confirmation is provided by the workspace.
  * @param ctx - Owning plugin lifetime.
  * @param store - Durable project store.
+ * @param maxBytes - Maximum UTF-8 document bytes.
  */
-export function registerPlanTools(ctx: Context, store: MeetingStore): void {
+export function registerPlanTools(ctx: Context, store: MeetingStore, maxBytes: number): void {
   const output = {
     schema: { type: 'string' as const },
     render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }],
@@ -29,6 +32,7 @@ export function registerPlanTools(ctx: Context, store: MeetingStore): void {
     parameters: {
       id: { type: 'string', description: 'Existing plan id for an edit. Omit when creating.' },
       expectedRevision: { type: 'integer', required: true, description: 'Zero for creation, otherwise latest content revision from project_plan_list.' },
+      documentPath: { type: 'string', required: true, description: 'Existing UTF-8 plan file inside the main conversation working directory, which must be a Git project. Write the complete plan there with file tools before saving this index.' },
       goal: { type: 'string', required: true, description: 'Project goal, constraints and expected delivery.' },
       teamId: { type: 'string', required: true, description: 'Saved team from employee_list.' },
       background: { type: 'array', required: true, description: 'Relevant source material and confirmed decisions. An empty array explicitly records that none is supplied.',
@@ -66,7 +70,7 @@ export function registerPlanTools(ctx: Context, store: MeetingStore): void {
         } },
       },
     }, output,
-    execute: (args, exec) => {
+    execute: async (args, exec) => {
       if (!exec.agent || ctx.subagents.rootOf(exec.agent) !== exec.agent) {
         throw new ToolContextUnavailableError('Save project plans from the main conversation.')
       }
@@ -91,12 +95,15 @@ export function registerPlanTools(ctx: Context, store: MeetingStore): void {
         || !team.memberIds.includes(id) || !employees.some(employee => employee.id === id)))) {
         throw new ToolArgsError(['Reviewers must be existing team employees other than the task author.'])
       }
-      return Promise.resolve(JSON.stringify(store.savePlan({
+      const cwd = await ctx.workingDirectory.ensure(exec.agent, exec.signal)
+      const document = await observePlanDocument(ctx, args.documentPath, cwd, maxBytes, exec.signal)
+      return JSON.stringify(store.savePlan({
+        document,
         originSessionId: args.id === undefined ? exec.agent.session.id
           : store.currentPlan(brandString<ProjectPlanId>(args.id), args.expectedRevision).originSessionId ?? exec.agent.session.id,
         id: brandString<ProjectPlanId>(args.id ?? randomUUID()), revision: args.expectedRevision + 1,
         goal: args.goal, background: background.data, tasks: tasks.data, team, employees, confirmed: false,
-      }, args.expectedRevision)))
+      }, args.expectedRevision))
     },
   })))
 }

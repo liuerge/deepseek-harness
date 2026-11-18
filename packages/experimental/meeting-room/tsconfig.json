@@ -40,6 +40,9 @@
     },
     {
       "path": "../../team/agent-team"
+    },
+    {
+      "path": "../../core/system-prompt"
     }
   ]
 }

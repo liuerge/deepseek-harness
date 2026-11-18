@@ -99,6 +99,8 @@ The Host half declares `welcomeNoticeVersion` as a volatile field of the `ui-set
 
 -----
 
+Feature links use the shared [settings navigation](../ui-settings/README.md) to open a section in this same dialog. The capability uses the shell’s existing viewing state and is withdrawn when its sidebar registration or access is removed.
+
 <a id="further-exploration"></a>
 ## Further Exploration
 

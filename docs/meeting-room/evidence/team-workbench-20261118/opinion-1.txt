@@ -1,0 +1,127 @@
+I have verified all facts needed. Here is my research/implementation opinion as the 研发员工.
+
+---
+
+# 研发员工调研与接入意见（第一阶段：只讨论，未写文件、未执行命令）
+
+## 0. 核心结论（先说结论，因为它改变本次交付性质）
+
+**v020 冻结源里根本不存在 `memory_context` 的接入点，也没有任何裁剪逻辑。** 我的验证方法：对 v020 全目录做两类独立检索：
+
+- 检索 `memory`（不限定关键词、不限文件类型，覆盖 `*.py` / `*.txt` / `*.json`）→ 结果：**No matches found**（两次独立检索均确认）。
+- 检索 `memory_context|memory_reference` → 在 v020 无任何命中；该组合只在 `packages/triage-memory/tests/test_investigation_context.py:9` 出现（那是裁剪 CLI 自己的测试，不是 v020 消费点）。
+
+即：`memory_context` 在 v020 **零引用**。因此「memory_context 在哪些节点被消费」的答案是：**没有节点消费它**。这必须写进交付说明，不能用假设填补。
+
+冻结源里有的"上下文"是另一套东西，全部是 `preflight_context` / `f5_context` / `original_log`，与记忆无关。
+
+### v020 里真实的"上下文组装点"（这才是可核实的事实）
+全部 8 个节点的 `prepare()` 入口同构，行号完全一致：
+
+| 文件 | `prepare()` 定义 | 组装 context | 序列化返回 |
+|---|---|---|---|
+| `01_initialize.v020.py:217` | :217 | :231 | :263 |
+| `02_prepare.v020.py:217` | :217 | :231 | :263 |
+| `02_prepare_loop.v020.py:217` | :217 | :231 | :263 |
+| `03_accept.v020.py:217` | :217 | :231 | :263 |
+| `03_accept_loop.v020.py:217` | :217 | :231 | :263 |
+| `04_merge.v020.py:217` | :217 | :231 | :263 |
+| `04_merge_loop.v020.py:217` | :217 | :231 | :263 |
+| `runtime.v020.py:217` | :217 | :231 | :263 |
+
+`context` 字段清单（`02_prepare.v020.py:231-262` 逐行读得）：
+- `:231` `original_log`, `f5_context`, `repair_feedback`
+- `:232` `preflight_context`（deepcopy 自 `state.get('preflight_context', {})`）
+- `:241` `action_protocol`
+- `:245` `execution_records`（`:247-251` 是**已有的去重裁剪**：已转 evidence 的 record 弹掉 `result`、回填 `evidence_id`）
+- `:252` `collected_evidence`
+- `:253` `capability_index`，`:259` `tool_catalog`，`:260` `catalog_rules`
+- `:261` `budget_remaining`，`:262` `next_request_id`
+- `:263` 最终 `json.dumps(context, ensure_ascii=False, separators=(',',':'))`
+
+**关键判断**：`:247-251` 证明冻结源**有**裁剪逻辑，但只是"execution_records 结果去重"，**不是** `compact_investigation_context` 的字符预算裁剪，二者语义不同、不可互认。
+
+### 背景 README（只作参考，不复制证据）
+`deployments/digital-team-context-20261117/README.md` 我读了全文 33 行，可借鉴的**做法**（不是结论）：
+- `:7` 每次实验 `mktemp` 新建 `N8N_USER_FOLDER`，不用已有 n8n 库；Node 26 下必须 `N8N_EXPRESSION_ENGINE=quickjs`（vm isolate 在本机 Node 26/24 均失败）。
+- `:9` 增强两轮字符数 23031→3947、30594→12440；保留必需原文+SHA-256，只裁可选轨迹；预算=1 的第三条进 Failed，模型调用数 0。
+- `:29` **"n8n 自身可以执行成功而业务 status=failed，必须依据业务状态判定"；"CLI 写入不是原子的，调用者不得监听文件出现来推进"**。这两条应直接提升为本次验收硬规则。
+- `:3` 明示"原 current、冻结版本和生产状态未修改" —— 与本次边界 1 一致。
+
+---
+
+## (1) 研究/接入说明文档建议结构
+
+建议 `deployments/team-workbench-20261118/` 下交付 `RESEARCH.md`（研发说明），结构如下，每条都带 `文件:行`：
+
+1. **目的与边界**：本次只在 `deployments/team-workbench-20261118/`；v020 与 `packages/triage-memory/` 只读。
+2. **v020 记忆消费点核实（结论：零）**
+   - 证据：`memory` 在 v020 全目录 `*.py`/`*.txt`/`*.json` 检索均无命中（两次独立检索）；`memory_context|memory_reference` 在 v020 无命中，仅在 `packages/triage-memory/tests/test_investigation_context.py:9`。
+   - `prepare()` 8 节点同构清单（上表），`:231-263` context 字段逐行。
+   - 冻结源自有裁剪：`02_prepare.v020.py:247-251`（execution_records 去重，非字符预算裁剪）。
+   - 入口/绑定参考：`00_normalize_alert.v020.py:7`（original_log 入口）、`build.v020.py:195-197`（original_log/f5_context/preflight_context 绑定说明）、`build.v020.py:208-211`（preflight/f5 语义）。
+   - manifest：`manifest.json:2-4`（v020、created_at、note=固定前置网段及归并分页子工作流）、`:51` `evaluation_status: not_evaluated_unless_a_run_snapshot_matches`。
+3. **裁剪 CLI 契约**（下节详列，逐条来自源码与测试）
+4. **接入建议**
+   - **建议"不接入 v020"**：理由 —— v020 无该字段、`manifest.json:51` 说明无匹配快照即未评估、硬边界 1 禁止修改 current/生产。任何"接入"都等于改冻结源或改 current，越权。
+   - 可行的**旁路接入**：仅把 `compact_investigation_context.py` 作为独立 CLI 在员工流程里跑合成 fixture，产出 `memory_reference` 供说明引用；**不写回**、不改节点、不进 prompt。
+   - `schema/memory-context.schema.json` 与 CLI 的 `memory_context` **不是同一 schema**：前者要求 `schema_version/policy/similar_cases`（:8-10，`additionalProperties:false`），后者只校验 `tenant/scenario/scenario_version/source`（源码 :33-38）。文档必须显式区分，否则验收会误判"不符合记忆 schema"。这是我最担心的验收陷阱。
+5. **背景做法引用**：`digital-team-context-20261117/README.md:7,9,29`，标注"仅背景，非本次证据"。
+
+### 裁剪 CLI 契约（逐条来自 `scripts/compact_investigation_context.py` 与测试）
+- CLI：`--input` / `--output` 必填（`:81-82`）；`source==target` 报错（`:87-88`）。
+- 输出用 `json.dumps(..., ensure_ascii=False, sort_keys=True, separators=(',',':'))`（`:9`），即**紧凑+排序键**，且 `output_chars` 自洽（`:60-65` measure 循环）。
+- **退出码语义（验收核心）**：`:93` `status=='ok'`→0；`budget_exceeded`→**2**；`ValueError/OSError/JSONDecodeError`→**1**（`:94-96`）。测试对应 `test_investigation_context.py:43`（2）、`:66,80,86,95`（1）。
+- 根必填：`tenant/scenario/scenario_version/case_id/as_of` 非空字符串（`:15-17`）；`instructions/constraints/unresolved` 非空字符串 list（`:18-20`）；`budget_chars` int≥1、`optional_excerpt_chars` int≥0（`:21-24`）。
+- scope 强校验：`memory_context.tenant/scenario/scenario_version` 必须与根相等（`:36-38`，**case_id 可不同**，见测试 fixture 根 `case_id='c'` 而 memory `case_id='old'`）；`memory_context` 必含 `source`（`:33-35`）；每条 evidence 必含 `tenant/scenario/case_id` 且与根相等（`:52-54`）、`id/source/observed_at/text` 非空（`:44-46`）、`required` 必须 bool（`:47-48`）、`id` 不重复（`:49-51`）。
+- 行为：required 证据保留全文；非 required 先按 `optional_excerpt_chars` 截断（`:56`，测试 `:32-33` 得 `'abc'`）；超预算时**从后往前**把非 required 文本置空并标 `omitted:true`（`:66-72`，测试 `:45`）；全裁完仍超 → `status='budget_exceeded'`（`:73-74`）。
+- 输出新增：`schema_version='1'`、`status`、`output_chars`、`memory_reference.role='historical_reference_not_current_evidence'`（`:39`，测试 `:36`）、每条 `sha256`(原文)、`truncated`、`omitted`（`:57-59`，测试 `:35`）。
+- **非原子写**：`:91` `target.open('x')` 独占创建，重复跑同名文件→exit 1 且文件不变（测试 `:78-81`）；坏 JSON→exit 1 且**不生成** target（`:85-87`）。
+
+---
+
+## (2) 需要交付的合成 fixture 清单与字段/scope 要求
+
+全部放 `deployments/team-workbench-20261118/fixtures/`，**不得**使用真实告警/evidence/private：
+
+| # | 文件（建议名） | 用途 | 关键字段与取值 |
+|---|---|---|---|
+| F1 | `fixtures/cli_baseline_input.json` | CLI 正向（exit 0） | 根 `tenant='synthetic-lab'`, `scenario='rasp'`, `scenario_version='v1'`, `case_id='case-syn-001'`, `as_of` ISO；`instructions/constraints/unresolved` 各≥1 非空串；`budget_chars=5000`, `optional_excerpt_chars=3`；evidence 2 条：①`required:true` 含中文/多字节文本（验证 `ensure_ascii=False` 与保留），②`required:false` 文本长于 cap（验证截断+`truncated`）；每条补 `tenant/scenario/case_id` = 根值；`memory_context` 具 `tenant/scenario/scenario_version` = 根值、`source='review'`、`case_id` **故意不同**（如 `'case-old-000'`）以验证允许历史 case_id |
+| F2 | `fixtures/cli_budget_exceeded_input.json` | CLI 反向（**exit 2**） | 同 F1 但 `budget_chars=1`；断言 `status='budget_exceeded'`、非 required `omitted:true`、`source` 保留、required 文本保留（对齐 `:39-48`） |
+| F3 | `fixtures/cli_scope_reject_*.json`（9 个，或用生成脚本产出） | 9 个 scope 拒绝（exit 1、无输出） | 精确复刻 `test_investigation_context.py:51-61` 的 9 种 mutation：memory tenant/scenario 篡改、memory 删 `scenario_version`、memory 删 `source`、evidence 删 `tenant`/`scenario`/`case_id`、evidence tenant/case_id 篡改 |
+| F4 | `fixtures/cli_invalid_*.json`（3 个） | 结构性拒绝（exit 1） | 复刻 `:90`：删 `budget_chars`、删 evidence `source`、evidence `scenario` 改 `'hids'` |
+| F5 | `fixtures/cli_malformed.json` | 坏输入 | 内容仅 `{`（对齐 `:83-87`），断言 exit 1 且输出文件**不存在** |
+| F6 | `fixtures/n8n_workflow.json` | n8n `import:workflow` 用 | **不依赖外部模型适配器/bridge**：只含 Manual Trigger → Read/Write File(或 Execute Command 调上述 CLI) → Set/IF 判定退出码；不得出现任何 model/bridge/ES 节点 |
+| F7 | `fixtures/run_manifest.md`（或 `.sh` 复刻） | 可复核命令 | 显式含 `mktemp -d` 作 `N8N_USER_FOLDER`、`N8N_EXPRESSION_ENGINE=quickjs`、`import:workflow`、`execute --id`；记录 Node/n8n/python 版本 |
+
+**scope 硬要求**：所有 fixture 的 `tenant` 必须标注为合成（如 `synthetic-lab`），并在 README 声明"非生产、非真实样本"；不得从 `evidence/private/`、`.env`、真实告警复制任何字段。
+
+---
+
+## (3) 不修改边界 + 验证前置条件（必须逐条写进计划）
+
+### 不修改边界（我作为研发承诺）
+- 只读：`scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/`（含 `manifest.json`）、`packages/triage-memory/` 的脚本/测试/schema。
+- 不写/不改：`current/`、任何生产配置、`deployments/digital-team-context-20261117/`（其证据**只能引用不得冒充本次执行**）、`evidence/private/`、`.env`。
+- 本次唯一写入目录：`deployments/team-workbench-20261118/`。
+- **不改 v020 任何字节**：因此"接入 memory_context"在本阶段只能走旁路、不改节点。
+- 不读 `.env` / 密钥 / 真实告警 / `evidence/private/`。
+
+### 验证前置条件（阻塞项，缺任一即不得开工）
+1. **WSL 可用**：需先确认 WSL 发行版与版本（背景为 Ubuntu-24.04 / Python 3.12.3 / Node 26.13.1 / n8n 2.47.7，`digital-team-context-20261117/README.md:7`）。**前置校验命令必须先跑通再谈 n8n**，不可假设。
+2. **n8n CLI 可用 + quickjs**：按 `:7` 必须设 `N8N_EXPRESSION_ENGINE=quickjs`；每次 `mktemp -d` 作 `N8N_USER_FOLDER`，不复用已有库。
+3. **Windows 文件权限风险（明确提示）**：本会话命令执行可能因 Windows ACL 被沙箱阻塞。建议 n8n/WSL 侧产物先落 WSL 临时目录，再回写到 `deployments/team-workbench-20261118/`；若回写被拒，应记录失败而非改目录（边界 3）。若确属 ACL 问题再评估，不在本阶段自行绕过。
+4. **Python 侧**：跑 `python -m unittest packages.triage-memory.tests.test_investigation_context -v`（聚焦，不是全量）；测试自身 `subprocess` 调用脚本，`sys.executable` 需为本机 python3。注意测试用了 `tempfile` 写临时目录 + `target.open('x')`，若临时目录落在被沙箱保护的 Windows 路径可能失败 → 建议临时目录变量指向 WSL tmp。
+5. **退出码判定纪律**（引 `:29`）：必须判 `returncode` 与 JSON `status`，不能只看"文件出现"或"n8n 执行成功"。
+
+### 我给出的验收建议（供验收节点员工读取真实产物时判定）
+- 每条验收必须落到**实际产物**：原始 stdout/stderr、退出码、输出文件内容、失败记录文件。
+- 对 F1：exit 0 + `output_chars == len(文件)` + required 中文保留 + 二次运行结果字节一致（确定性）。
+- 对 F2：exit **2** + `status='budget_exceeded'`。
+- 对 F3/F4/F5：exit **1** 且 target 不存在或不变。
+- 对 n8n：必须给出 `import:workflow` 与 `execute --id` 的**原始输出**；仅"n8n 成功"不足以通过，须同时有业务状态判定。
+- **证据不足即阻塞**：若上述任一前置（WSL/n8n/quickjs/权限）未满足或产物缺失，验收必须判失败，不得口头通过。
+
+---
+
+**阶段声明**：本次仅讨论与计划输入，我未创建/修改任何文件、未执行测试或命令、未启动服务、未改动任何版本或配置。以上文件路径与行号均来自我本轮实际读取的内容。

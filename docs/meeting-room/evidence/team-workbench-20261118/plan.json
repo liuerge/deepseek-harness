@@ -1,0 +1,227 @@
+{
+  "originSessionId": "session-7f7d8429-3531-4d0d-8a1f-b946450886cb",
+  "id": "2a086d35-b10e-4dfa-9ec4-e56946500c7b",
+  "revision": 1,
+  "goal": "在只读边界内研究 NDR Coze v020 冻结源（scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/）的历史记忆（memory_context）与调查上下文字符裁剪（packages/triage-memory/scripts/compact_investigation_context.py）接入方式，并由已选择的 SecOps 工程交付团队实际执行可复核验证：研发员工产出研究与接入说明、合成 fixture、不依赖外部模型适配器的 n8n 合成流程与 WSL 隔离运行脚本；测试员工实际运行裁剪模块聚焦测试，并通过 WSL 启动隔离 n8n CLI 执行合成流程，保存可复核命令、原始输出、退出码与失败记录；每个节点由不同员工读取真实产物独立验收，全部标准通过后自动放行，证据不足必须阻塞。\n\n硬边界：交付物只写入 deployments/team-workbench-20261118/；不修改 current、生产配置、scenarios/ 与 packages/ 既有文件、deployments/digital-team-context-20261117/ 既有实验；不读 .env、API 密钥、真实告警样本与 evidence/private/；n8n 只是测试员工使用的本地流程工具，不是生产编排平台；旧实验证据只能作背景，不得冒充本次员工执行。第一阶段只讨论和保存计划，用户确认后才启动开发与测试。当前会话 Windows 命令执行不可运行（沙箱 provision 失败 Win32 5），记为实施前阻塞；测试实施路径按 WSL 规划，执行前必须先验证支持命令执行的环境，失败即记录 blocked，不自行修复 ACL、不提权、不重试已拒绝命令。",
+  "background": [
+    {
+      "title": "AGENTS.md 协作与交付边界（项目级）",
+      "source": "AGENTS.md#L1-L32",
+      "content": "默认中文记录；变更交付分 deployments/<变更名>/（变更单、依赖清单、验收记录，用于评审追溯）与 deploy/<变更名>-<日期>/；不提交凭据、API 密钥、.env、生产访问口令、运行数据库、缓存或临时产物；不直接覆盖生产工作流或调度 state；Coze 平台工作流在本工程用 WSL n8n 等价模拟，n8n 不是生产编排平台；脚本依赖边界与提示词/契约同步要求。本次只读 v020 与 triage-memory。"
+    },
+    {
+      "title": "当前基线：NDR 数字员工独立实验状态",
+      "source": "docs/当前基线.md#L110-L114",
+      "content": "2026-11-17 NDR v020 独立副本在 WSL n8n 完成基线、记忆与裁剪两条流程及超预算负分支；专属 ES7 索引七条合成记录过滤通过；真实模型为 OpenCodeGo 三条路由，工具返回为明确不可用的合成值；只证明本地合成实验，不代表 Coze 发布、真实生产工具或 DSH 完整自动交付；原 current 与生产状态不变。"
+    },
+    {
+      "title": "DR-020：NDR 记忆与字符裁剪使用独立实验候选",
+      "source": "docs/决策记录.md#L215-L220",
+      "content": "冻结 v020 与 current 保持原样，使用来源 SHA 校验的独立节点 CLI 副本在 WSL n8n 验证；调查上下文保留必需输入、scope 与原文摘要哈希，只裁剪可选调试内容；压缩 CLI 失败时停止后续模型；历史记忆只作参考，不能替代当前证据或直接更新正式知识；本地使用 n8n QuickJS 表达式引擎及 Node 26；实现和验收范围以 deployments/digital-team-context-20261117/README.md 为准。"
+    },
+    {
+      "title": "v020 冻结源事实（只读）",
+      "source": "scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/（manifest.json、runtime.v020.py#L217-L263、02_prepare.v020.py#L231-L262）",
+      "content": "8 个控制节点 prepare() 同构：context 在 :231-262 组装（original_log、f5_context、repair_feedback、preflight_context、action_protocol、execution_records、collected_evidence、capability_index、tool_catalog、catalog_rules、budget_remaining、next_request_id），:263 以 json.dumps 返回；:247-251 的 execution_records 去重是既有逻辑，不是字符预算裁剪；全目录检索 memory/memory_context 零命中（主助手独立复核）；manifest.json:51 evaluation_status=not_evaluated_unless_a_run_snapshot_matches。"
+    },
+    {
+      "title": "调查上下文字符裁剪 CLI 契约",
+      "source": "packages/triage-memory/scripts/compact_investigation_context.py#L12-L100；packages/triage-memory/tests/test_investigation_context.py；packages/triage-memory/schema/investigation-context.schema.json；packages/triage-memory/README.md#L132-L136",
+      "content": "独立 CLI --input/--output；根字段 tenant/scenario/scenario_version/case_id/as_of、instructions/constraints/unresolved、budget_chars>=1、optional_excerpt_chars>=0；evidence 必含 id/source/observed_at/text/required 且 tenant/scenario/case_id 与根一致；required 全文保留，optional 按 cap 截断或省略并保留原文 sha256；memory_context 需 tenant/scenario/scenario_version/source 且前三者与根一致（历史 case_id 可不同）；退出码 0=ok、2=budget_exceeded（仍写文件）、1=无效输入/写入失败（open('x') 非原子写、不覆盖）；输出为 sort_keys 紧凑 JSON，output_chars==文件长度。测试 5 个方法；按源码逐行展开为 21 次 CLI 调用（6×exit0、1×exit2、14×exit1）；测试用 scenario=rasp，不覆盖 NDR/web，不校验输出 schema。"
+    },
+    {
+      "title": "memory_context 契约缺口（本次只记录，不修改）",
+      "source": "packages/triage-memory/schema/memory-context.schema.json#L7-L12；packages/triage-memory/triage_memory/constants.py#L4-L5；packages/triage-memory/triage_memory/context.py#L17-L57；背景参考 deployments/digital-team-context-20261117/memory/context.json",
+      "content": "memory-context.schema.json 为 additionalProperties=false，required 含 schema_version/status/policy/similar_cases，policy const=reference_only_no_label_copy；constants.POLICY_VERSION=reference_only_no_label_copy/v1（不一致）；build_memory_context() 只产 schema_version/status/policy/retrieval_id/as_of/counts/similar_cases/error，不产 tenant/scenario/scenario_version/source；旧实验 memory/context.json 的 scope 是手工补齐 fixture。因此真实上游对象直接喂裁剪 CLI 会 exit 1；本次 fixture 的 scope 属合成注入声明，交付不得声称已完成端到端接通。"
+    },
+    {
+      "title": "既有实验仅作背景（证据不得复用）",
+      "source": "deployments/digital-team-context-20261117/README.md#L3-L33；deployments/digital-team-context-20261117/dsh-capture/run-n8n.sh",
+      "content": "WSL Ubuntu-24.04、Python 3.12.3、Node 26.13.1、n8n 2.47.7、ES 7.17.15；N8N_EXPRESSION_ENGINE=quickjs（本机 Node 26/24 无法创建 vm isolate）；每次实验 mktemp 新建 N8N_USER_FOLDER，不复用已有 n8n 库；n8n import:workflow --input + execute --id --rawOutput；原 current、冻结版本和生产状态未修改；n8n 执行成功不等于业务通过，必须判定业务 status；压缩 CLI 非原子写，不得监听文件出现推进；既有流程依赖 bridge/模型路由，本交付不依赖外部模型适配器；其日志与 acceptance.json 不得顶替本次证据。"
+    },
+    {
+      "title": "环境边界：n8n 只是 Coze 的本地等价模拟",
+      "source": "docs/项目背景与需求.md#L27-L36",
+      "content": "Coze 平台工作流（NDR/RASP/异常外联等）在本工程用 WSL n8n 等价模拟；n8n 不是生产编排平台，验证结论必须区分本地模拟与 Coze 实际发布；完整数据流与职责矩阵见 docs/系统架构与环境边界.md。"
+    },
+    {
+      "title": "实施前阻塞：当前会话命令执行不可用",
+      "source": "本会话 2026-11-18 实测记录；用户 2026-11-18 纠偏",
+      "content": "pwsh 在沙箱 provision 阶段失败：SetNamedSecurityInfoW failed (Win32 5) grantWrite(D:\\agentProjet\\secops-triage)，命令未运行；文件读写工具正常。用户明确：不修复 ACL、不改系统权限、不使用 danger-full-access、不重试已拒绝命令。Windows 命令不可运行记为实施前阻塞；阶段二测试按 WSL 路径规划，执行前必须验证 WSL 发行版与状态、python3/node、n8n 可执行与版本、executeCommand 最小探针与 cwd/参数行为；任一失败记录 blocked，不得以旧实验证据或推断冒充执行。"
+    }
+  ],
+  "tasks": [
+    {
+      "role": "研发实现与接入说明",
+      "employeeId": "14320399-e223-4d77-89da-76aca0853b32",
+      "instruction": "在只读边界内（不修改 scenarios/、packages/、current/、生产配置与 deployments/digital-team-context-20261117/），在 deployments/team-workbench-20261118/ 产出：1) README.md 研究与接入说明：逐条带文件:行引用，写清 v020 冻结源无 memory_context 接入点（检索方法与零命中）、8 节点 prepare() 同构与上下文组装点、冻结源 execution_records 去重与字符裁剪 CLI 的区别、裁剪 CLI 契约（输入字段/scope/退出码 0/2/1/非原子写/确定性/失败语义）、历史记忆只作参考的规则、memory_context 契约缺口（上游不产 scope 四字段、policy 常量不一致）、以及“本次不修改 v020、不声称已完成真实端到端接通”的结论与理由。2) fixtures/cli_baseline_input.json（正向 exit 0，含 required 长文本与超 optional_excerpt_chars 的可选文本）、fixtures/cli_budget_exceeded_input.json（budget_chars=1，exit 2）、fixtures/cli_invalid_scope.json（memory_context tenant 不匹配，exit 1）、fixtures/cli_invalid_json.txt（非法 JSON，exit 1 且不产输出）。全部合成：tenant=synthetic-teamwork-20261118、scenario=web、scenario_version=ndr-coze-v020、case_id=synthetic-20261118-001 或等价合成命名；memory_context 的 scope 四字段在 README 明确标注为合成注入声明。3) workflow/teamwork-compact.workflow.json：ID 含 teamwork-20261118；仅内置节点 manualTrigger/set/executeCommand/readWriteFile/if/noOp；executeCommand 调 python3 运行裁剪 CLI，readWriteFile 读回输出，if 按 CLI 退出码/status 分流到 Completed/Failed；不含 httpRequest、AI/LangChain、bridge、端口、credentials。4) scripts/run-n8n-teamwork.sh：set -euo pipefail；N8N_USER_FOLDER=$(mktemp -d)；N8N_EXPRESSION_ENGINE=quickjs；import:workflow / execute --id --rawOutput；每次运行唯一输出路径；原始输出重定向到交付目录。5) scripts/verify_evidence.py：仅标准库的只读校验器，校验输出 JSON 的字段/scope/role/sha256/output_chars 与退出码记录。6) source-hashes.json：v020 四个控制节点、manifest.json、裁剪 CLI、investigation-context schema、裁剪测试的 sha256。禁止写 evidence/ 执行结果，禁止写“已执行/已通过”结论；不得读 .env、密钥、真实告警、evidence/private/。若交付目录内已有 .probe-write-check.tmp 残留，保留并在 README 标注待清理（当前会话无删除命令能力）。",
+      "acceptance": "README 的关键结论逐条可在只读源中核对（至少含 v020 零 memory 引用、prepare 组装点、CLI 退出码与非原子写、契约缺口与不端到端接通的声明）；4 个 fixture 与 CLI 校验规则一致且全为合成数据；workflow 与运行脚本零外部模型/HTTP/bridge/凭据，含 WSL 隔离（mktemp N8N_USER_FOLDER、quickjs）与 import/execute 原始输出留证路径；source-hashes.json 可用 sha256 复算；只在交付目录新增，无 evidence/ 执行结果与通过性结论。",
+      "review": {
+        "rework": {
+          "maxAttempts": 1
+        },
+        "reviewerIds": [
+          "8a56136a-67f7-45a4-8ba3-736d02b26faf",
+          "80469c91-3672-49e7-8986-db72b8dafbbc"
+        ],
+        "release": "automatic",
+        "artifactPaths": [
+          "deployments/team-workbench-20261118/README.md",
+          "deployments/team-workbench-20261118/fixtures/cli_baseline_input.json",
+          "deployments/team-workbench-20261118/fixtures/cli_budget_exceeded_input.json",
+          "deployments/team-workbench-20261118/fixtures/cli_invalid_scope.json",
+          "deployments/team-workbench-20261118/fixtures/cli_invalid_json.txt",
+          "deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json",
+          "deployments/team-workbench-20261118/scripts/run-n8n-teamwork.sh",
+          "deployments/team-workbench-20261118/scripts/verify_evidence.py",
+          "deployments/team-workbench-20261118/source-hashes.json"
+        ],
+        "downstream": [
+          "T2 执行输入：deployments/team-workbench-20261118/fixtures/ 下 4 个合成 fixture；workflow/teamwork-compact.workflow.json；scripts/run-n8n-teamwork.sh；scripts/verify_evidence.py；source-hashes.json"
+        ],
+        "criteria": [
+          {
+            "id": "T1-C1",
+            "description": "研究与接入说明覆盖已核实事实并逐条给出文件:行引用",
+            "method": "验收员工打开 README.md，在只读源中逐条核对引用位置，抽查至少 6 条关键结论",
+            "expected": "至少 8 条带文件:行 的关键结论；明确写出 memory/memory_context 在 v020 全目录零命中及检索方法；明确 02_prepare.v020.py:247-251 的 execution_records 去重不是字符预算裁剪；明确 prepare 上下文组装点与 model_user_input 位置",
+            "evidence": "deployments/team-workbench-20261118/README.md；scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/02_prepare.v020.py；scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/runtime.v020.py"
+          },
+          {
+            "id": "T1-C2",
+            "description": "合成 fixture 符合裁剪 CLI 校验规则，且 memory_context scope 被明确标注为合成注入声明",
+            "method": "验收员工读取 4 个 fixture，按 compact_investigation_context.py 第 12-59 行规则逐字段核对 scope、required/optional、budget 与 optional cap；grep 检查无真实域名/IP/凭据",
+            "expected": "正向/超预算/scope 不匹配/非法 JSON 样例齐全；根与 evidence 的 tenant/scenario/case_id 一致；required 文本超过可选 cap 以便观察裁剪；memory_context 含 tenant/scenario/scenario_version/source 且与根一致；README 明确这些 scope 字段是合成注入声明而非上游真实产出；无真实样本数据",
+            "evidence": "deployments/team-workbench-20261118/fixtures/cli_baseline_input.json；deployments/team-workbench-20261118/fixtures/cli_budget_exceeded_input.json；deployments/team-workbench-20261118/fixtures/cli_invalid_scope.json；deployments/team-workbench-20261118/fixtures/cli_invalid_json.txt；packages/triage-memory/scripts/compact_investigation_context.py"
+          },
+          {
+            "id": "T1-C3",
+            "description": "n8n workflow 与运行脚本零外部模型适配器/bridge/HTTP/凭据",
+            "method": "验收员工解析 workflow JSON 并枚举节点 type 与参数，检索脚本和 JSON 中的 httpRequest、AI/LangChain、8798/8790、credentials、密钥与模型关键字",
+            "expected": "仅含 manualTrigger/set/executeCommand/readWriteFile/if/noOp 等内置节点；无 httpRequest、无 AI/LangChain 节点、无 bridge 端口、无 credentials、无模型/密钥；脚本含 set -euo pipefail、N8N_USER_FOLDER=$(mktemp -d)、N8N_EXPRESSION_ENGINE=quickjs、import:workflow、execute --id --rawOutput，原始输出重定向到交付目录，且每次运行使用唯一输出路径",
+            "evidence": "deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json；deployments/team-workbench-20261118/scripts/run-n8n-teamwork.sh"
+          },
+          {
+            "id": "T1-C4",
+            "description": "遵守只读与交付目录边界，未被未执行的结果污染",
+            "method": "验收员工用 git status --porcelain 与文件清单核对；检索 README/fixtures 是否声称已执行/已通过",
+            "expected": "除 deployments/team-workbench-20261118/ 外无新增或修改；交付目录内不存在 evidence/ 执行结果；README 只写“待测试员工执行”，无已验证/已通过结论；无 .env、密钥、真实告警或 evidence/private/ 内容",
+            "evidence": "deployments/team-workbench-20261118/；验收员工记录的 git status 输出（写入其验收记录，不改交付产物）"
+          }
+        ]
+      }
+    },
+    {
+      "role": "测试执行与证据记录",
+      "employeeId": "80469c91-3672-49e7-8986-db72b8dafbbc",
+      "instruction": "依赖 T1 产物，在 deployments/team-workbench-20261118/ 下实际执行并留证；本节点只新增 evidence/、failures/、acceptance.json 等自己的文件，不改 T1 产物。第一步环境前置校验并保存原始输出：wsl 发行版与状态、python3/node 版本、n8n 可执行与版本、N8N_USER_FOLDER 是否为新建 /tmp 目录、N8N_EXPRESSION_ENGINE=quickjs；先用最小探针 workflow 确认 executeCommand 的 cwd/参数名/退出码行为，再做正式流程。Windows 命令不可运行时不得伪造，按 blocked 记录并上报，不重试已拒绝的权限提升。第二步实跑聚焦测试：wsl 内 python3 -m unittest discover -s packages/triage-memory/tests -p test_investigation_context.py -v，期望 5 个测试方法全部 ok、无 skipped、退出码 0，保存完整原始输出与单独退出码。第三步实跑裁剪 CLI 三态：正向 fixture 期望 exit 0、status=ok、必需证据原文保留且 sha256 与原文一致、可选文本截断/省略、memory_reference.role=historical_reference_not_current_evidence、output_chars==文件长度；budget_chars=1 期望 exit 2 且 status=budget_exceeded 且必需证据仍完整；scope 不匹配期望 exit 1 且无输出文件；同一输入用唯一输出路径再跑一次比对字节一致；对已存在输出再跑期望 exit 1 且原文件不变。第四步 n8n 隔离 CLI 合成流程：新建 mktemp N8N_USER_FOLDER，import:workflow 后 execute --id --rawOutput，保存 import 日志、execute 原始输出全文、业务断言结果 JSON（cli_exit/status/memory_role/required sha256）；确认日志中无模型/bridge/HTTP 调用；n8n 成功不等于业务通过。失败一律追加 failures/ 记录（命令、时间、环境、退出码、完整原始输出），不得覆盖或删除；未真实执行的步骤在 acceptance.json 标 executed:false + reason；overall 三态 passed/blocked/failed，前置未满足或证据缺失写 blocked，真实执行但不达标写 failed；旧实验证据不计入任何 passed。",
+      "acceptance": "前置校验、聚焦测试、裁剪 CLI 三态与确定性/覆盖写保护、n8n 隔离合成流程各有可复核命令+原始输出+退出码+产物；业务状态与进程状态分开判定；失败记录只增不删，未执行步骤显式标注；证据不足或环境不支持命令执行时 overall=blocked，不得写 passed；只在交付目录新增文件。",
+      "review": {
+        "rework": {
+          "maxAttempts": 1
+        },
+        "reviewerIds": [
+          "14320399-e223-4d77-89da-76aca0853b32",
+          "8a56136a-67f7-45a4-8ba3-736d02b26faf"
+        ],
+        "release": "automatic",
+        "artifactPaths": [
+          "deployments/team-workbench-20261118/evidence/01-preflight-wsl.log",
+          "deployments/team-workbench-20261118/evidence/02-preflight-n8n.log",
+          "deployments/team-workbench-20261118/evidence/03-probe-executecommand.log",
+          "deployments/team-workbench-20261118/evidence/04-clip-test-unittest.log",
+          "deployments/team-workbench-20261118/evidence/05-clip-test-exitcode.txt",
+          "deployments/team-workbench-20261118/evidence/06-cli-direct-run.log",
+          "deployments/team-workbench-20261118/evidence/07-import-teamwork.log",
+          "deployments/team-workbench-20261118/evidence/08-n8n-teamwork.log",
+          "deployments/team-workbench-20261118/evidence/09-n8n-teamwork-status.json",
+          "deployments/team-workbench-20261118/evidence/10-compact-output.json",
+          "deployments/team-workbench-20261118/evidence/11-source-hashes.json",
+          "deployments/team-workbench-20261118/acceptance.json"
+        ],
+        "downstream": [],
+        "criteria": [
+          {
+            "id": "T2-C1",
+            "description": "WSL/n8n 前置校验与 executeCommand 探针真实执行并留证",
+            "method": "验收员工读取 evidence/01-preflight-wsl.log、02-preflight-n8n.log、03-probe-executecommand.log，核对命令、原始输出、退出码与版本信息",
+            "expected": "记录实际 WSL 发行版与状态、python3/node 版本、n8n 可执行路径与版本、N8N_USER_FOLDER 为新建 /tmp 目录、N8N_EXPRESSION_ENGINE=quickjs；最小探针确认 executeCommand 的 cwd/参数名/退出码行为；若前置失败，acceptance.json 为 blocked 并写明阻塞项，不得出现伪造的成功证据",
+            "evidence": "deployments/team-workbench-20261118/evidence/01-preflight-wsl.log；deployments/team-workbench-20261118/evidence/02-preflight-n8n.log；deployments/team-workbench-20261118/evidence/03-probe-executecommand.log"
+          },
+          {
+            "id": "T2-C2",
+            "description": "裁剪模块聚焦测试真实执行且未改动源文件",
+            "method": "验收员工读取 evidence/04-clip-test-unittest.log 与 05-clip-test-exitcode.txt，与 source-hashes.json 对比测试文件 sha256，并核对 git status 是否显示 packages/ 改动",
+            "expected": "输出含 5 个测试方法名与 ok 行、含 OK、无 skipped/fail/error；退出码记录为 0；测试文件 sha256 与 T1 source-hashes.json 一致；packages/ 与其他只读区域无修改",
+            "evidence": "deployments/team-workbench-20261118/evidence/04-clip-test-unittest.log；deployments/team-workbench-20261118/evidence/05-clip-test-exitcode.txt；deployments/team-workbench-20261118/source-hashes.json"
+          },
+          {
+            "id": "T2-C3",
+            "description": "裁剪 CLI 三态、确定性与覆盖写保护均有真实证据",
+            "method": "验收员工读取 evidence/06-cli-direct-run.log 与 10-compact-output.json，逐项核对退出码、JSON 字段、sha256、output_chars 与文件长度",
+            "expected": "exit 0 时 status=ok、必需证据原文保留且 sha256 与原文一致、可选文本按 cap 截断或省略、memory_reference.role=historical_reference_not_current_evidence、output_chars==len；budget_chars=1 时 exit 2 且 status=budget_exceeded、必需证据仍完整；scope 不匹配时 exit 1 且无输出文件；唯一输出路径二次运行字节一致；已存在输出再跑 exit 1 且原文件不变",
+            "evidence": "deployments/team-workbench-20261118/evidence/06-cli-direct-run.log；deployments/team-workbench-20261118/evidence/10-compact-output.json"
+          },
+          {
+            "id": "T2-C4",
+            "description": "WSL 隔离 n8n CLI 合成流程真实执行，且业务状态可判定",
+            "method": "验收员工读取 evidence/07-import-teamwork.log、08-n8n-teamwork.log、09-n8n-teamwork-status.json，确认 workflow id、N8N_USER_FOLDER、import 成功日志、execute 原始输出，并检索日志中无模型/bridge/HTTP/密钥痕迹",
+            "expected": "import 日志含成功导入；execute 原始输出为本次新 workflow（id 含 teamwork-20261118）且含运行数据；业务断言 JSON 含 cli_exit/status/memory_role/required sha256 且与 10-compact-output.json 一致；无 127.0.0.1:8798/8790、bridge、模型调用、OPENCODE/DEEPSEEK 密钥；N8N_USER_FOLDER 为新建临时目录；不把 n8n executionStatus=success 当作业务通过",
+            "evidence": "deployments/team-workbench-20261118/evidence/07-import-teamwork.log；deployments/team-workbench-20261118/evidence/08-n8n-teamwork.log；deployments/team-workbench-20261118/evidence/09-n8n-teamwork-status.json；deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json"
+          },
+          {
+            "id": "T2-C5",
+            "description": "失败记录与未执行标注符合纪律，证据不足即阻塞",
+            "method": "验收员工读取 failures/ 与 acceptance.json，核对三态口径、executed 标记与 critical 项；核对证据链是否都能映射到命令+原始输出+退出码+产物",
+            "expected": "failures/ 只增不删，每次失败含命令/时间/环境/退出码/完整输出；未真实执行步骤 executed:false + reason；overall 为 passed/blocked/failed 且与证据一致；任一 critical 项缺失时 overall=blocked；旧实验日志或 acceptance 不计入任何 passed",
+            "evidence": "deployments/team-workbench-20261118/acceptance.json；deployments/team-workbench-20261118/failures/"
+          },
+          {
+            "id": "T2-C6",
+            "description": "边界与目录纪律：只写交付目录、只读源未变、无敏感数据",
+            "method": "验收员工用 git status --porcelain 与 evidence/11-source-hashes.json 核对改动范围与源哈希，检索交付目录内是否含真实样本/密钥字段",
+            "expected": "除 deployments/team-workbench-20261118/ 外无修改（尤其 current、生产配置、packages/、scenarios/、deployments/digital-team-context-20261117/）；source-hashes 与 T1 一致；交付目录内无 .env、密钥、真实告警样本与 evidence/private/ 内容",
+            "evidence": "deployments/team-workbench-20261118/evidence/11-source-hashes.json；deployments/team-workbench-20261118/acceptance.json"
+          }
+        ]
+      }
+    }
+  ],
+  "team": {
+    "id": "eaa7a4f1-54f5-45b2-b808-5050f0aca882",
+    "revision": 1,
+    "name": "SecOps 工程交付团队",
+    "memberIds": [
+      "14320399-e223-4d77-89da-76aca0853b32",
+      "80469c91-3672-49e7-8986-db72b8dafbbc",
+      "8a56136a-67f7-45a4-8ba3-736d02b26faf"
+    ]
+  },
+  "employees": [
+    {
+      "id": "14320399-e223-4d77-89da-76aca0853b32",
+      "revision": 2,
+      "name": "SecOps 研发员工",
+      "responsibility": "根据已确认的标准实现 SecOps 研判与记忆流程；只处理指定合成实验输入，保留可审计证据，不访问生产。",
+      "provider": "opencode-go",
+      "model": "hy4-preview"
+    },
+    {
+      "id": "80469c91-3672-49e7-8986-db72b8dafbbc",
+      "revision": 1,
+      "name": "SecOps 测试与验收员工",
+      "responsibility": "根据主助手确认的标准独立检查真实文件，通过命令工具触发 WSL n8n 并报告可复核证据及失败；未实际执行的步骤必须明确标为未执行。",
+      "provider": "opencode-go",
+      "model": "minimax-m3"
+    },
+    {
+      "id": "8a56136a-67f7-45a4-8ba3-736d02b26faf",
+      "revision": 1,
+      "name": "SecOps 需求与方案员工",
+      "responsibility": "先调研现有实现并提供需求分析、方案讨论意见和可验收任务；不自动批准开发或扩大范围。",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash"
+    }
+  ],
+  "confirmed": false
+}

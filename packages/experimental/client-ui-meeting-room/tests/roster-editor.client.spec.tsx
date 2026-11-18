@@ -10,6 +10,21 @@ import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
+it('identifies an employee’s unavailable saved connection while retaining the available connection choices', () => {
+  const employee: Employee = { id: 'removed-route-worker' as Employee['id'], revision: 2, name: 'Author',
+    responsibility: 'Deliver files.', provider: 'removed-route', model: 'saved-model' }
+  render(<RosterEditor employees={[employee]} teams={[]} connections={[
+    { id: 'available-route', name: 'Available', models: [], failed: false },
+  ]} connectionsLoading={false} connectionsFailed={false} loading={false}
+  saveEmployee={vi.fn()} saveTeam={vi.fn()} delegateTeam={vi.fn()} t={makeTranslate(zh)} />)
+  fireEvent.click(screen.getByRole('button', { name: zh['roster.edit-employee'] }))
+  expect(screen.getByRole('alert').textContent).toBe(zh['roster.connection-missing'])
+  expect(screen.queryByText(zh['roster.no-connections'])).toBeNull()
+  expect(screen.getByRole('option', { name: 'Available · available-route' })).toBeTruthy()
+  expect(screen.getByDisplayValue('saved-model')).toBeTruthy()
+  expect(screen.getByRole('button', { name: zh['roster.save'] }).hasAttribute('disabled')).toBe(true)
+})
+
 it('retains a failed employee draft and saves its explicit connection and custom model without delegation', async () => {
   const saveEmployee = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
   const delegateTeam = vi.fn()

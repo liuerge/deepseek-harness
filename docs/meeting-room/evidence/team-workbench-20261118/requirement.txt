@@ -1,0 +1,14 @@
+项目：D:\agentProjet\secops-triage（SecOps 统一研判工程）。本次只用已选择的「SecOps 工程交付团队」做一个小型真实交付，验证本工程团队流程，不是界面验证。
+
+目标：研究 NDR Coze v020 冻结版本的历史记忆（memory_context）与调查上下文字符裁剪（compact_investigation_context）的接入方式，并让员工实际调用工具验证；n8n 只是测试员工使用的本地流程工具，不是生产编排平台。
+
+硬边界（必须逐条遵守）：
+1. 只读已有 v020 冻结源 scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/ 与 packages/triage-memory/ 下的裁剪脚本/测试/schema；不修改 current、不修改生产配置、不修改已有实验历史（deployments/digital-team-context-20261117/ 只作背景，其证据不能冒充本次员工执行）。
+2. 不读 .env、API 密钥、真实告警样本或 evidence/private/。
+3. 本次唯一交付目录：deployments/team-workbench-20261118/（研发说明、合成 fixture、测试证据、失败记录、验收记录都放这里；不得写到别的目录）。
+4. 测试员工必须通过 WSL 启动隔离的 n8n CLI（独立临时 N8N_USER_FOLDER，import:workflow + execute --id）执行一条不依赖外部模型适配器/bridge 的合成流程；保存可复核命令、原始输出和失败记录。裁剪模块要实际运行 packages/triage-memory/tests/test_investigation_context.py 聚焦测试。
+5. 每个节点由不同员工读取真实产物独立验收；证据不足必须阻塞，不得口头通过。
+
+阶段限制：当前只是第一阶段——讨论与保存计划。所有角色只读文件、只输出意见，禁止写文件、禁止执行测试/命令、禁止启动服务、禁止修改任何版本或配置。开发与测试在用户确认计划后才启动。
+
+请每个角色基于实际读到的文件回答：方案/范围与验收建议、开发实现意见、测试与证据意见，并给出具体文件路径与可执行检查方法；明确指出风险（包括本会话命令执行因 Windows 文件权限被阻塞、WSL/n8n 是否可用的前置校验）。

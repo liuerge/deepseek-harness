@@ -40,6 +40,7 @@ export interface ProjectInjected {
     connectionsFailed: boolean
   }> }
   refresh: () => void
+  openModelSettings: () => void
   newProject: () => void
   configureEmployee: () => void
   configureTeam: () => void
@@ -78,6 +79,7 @@ export function ProjectPage(props: Props) {
   const states = {
     started: 'project.started', starting: 'project.starting', running: 'project.running',
     'task-produced': 'project.task-produced', 'awaiting-review': 'project.awaiting-review',
+    'awaiting-direction': 'project.awaiting-direction',
     'awaiting-acceptance': 'project.awaiting-acceptance',
     reviewing: 'review.running', 'reviewer-produced': 'review.running',
     'acceptance-passed': 'review.passed', 'acceptance-blocked': 'review.blocked',
@@ -96,7 +98,8 @@ export function ProjectPage(props: Props) {
     {catalog.failed && <p role="alert">{t('project.error')}</p>}
     <RosterEditor employees={catalog.employees} teams={catalog.teams} connections={catalog.connections}
       connectionsLoading={catalog.connectionsLoading} connectionsFailed={catalog.connectionsFailed}
-      loading={catalog.loading} saveEmployee={saveEmployee} saveTeam={saveTeam} delegateTeam={delegateTeam} t={t} />
+      loading={catalog.loading} saveEmployee={saveEmployee} saveTeam={saveTeam} delegateTeam={delegateTeam}
+      openModelSettings={props.openModelSettings} t={t} />
     <section className={css.project}>
       <header className={css.header}>
         <h2>{t('plan.title')}</h2><Button onClick={preparePlan}>{t('plan.prepare')}</Button>
@@ -108,6 +111,7 @@ export function ProjectPage(props: Props) {
             <Button disabled={!mainSession} onClick={() => { editPlan(plan.id, plan.revision) }}>{t('plan.edit')}</Button>
           </header>
           <p>{t('plan.version', { revision: plan.revision })} · {plan.team.name} · {t(plan.confirmed ? 'plan.confirmed' : 'plan.draft')}</p>
+          <p>{plan.document?.path ?? t('artifacts.missing-document')}</p>
           {!mainSession && <><p>{t('plan.unlinked')}</p>
             <Button onClick={() => { adoptPlan(plan.id, plan.revision) }}>{t('plan.adopt')}</Button></>}
           <ul className={css.tasks}>{plan.employees.map(employee => <li key={employee.id}>
@@ -140,8 +144,8 @@ export function ProjectPage(props: Props) {
             </details>)}
           </>}
           {plan.executionId ? <p>{t('project.started')}</p> : plan.confirmed
-            ? <Button disabled={catalog.loading || !mainSession} onClick={() => { runPlan(plan.id, plan.revision) }}>{t('plan.run')}</Button>
-            : <Button variant="primary" disabled={catalog.loading}
+            ? <Button disabled={!plan.document || catalog.loading || !mainSession} onClick={() => { runPlan(plan.id, plan.revision) }}>{t('plan.run')}</Button>
+            : <Button variant="primary" disabled={!plan.document || catalog.loading}
               onClick={() => { void confirmPlan(plan.id, plan.revision) }}>{t('plan.confirm')}</Button>}
         </article>
       })}

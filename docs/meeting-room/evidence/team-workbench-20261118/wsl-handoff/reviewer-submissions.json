@@ -1,0 +1,153 @@
+{
+  "source": "Read-only extraction of tool/result metadata and structured_output submissions; no reasoning text included.",
+  "reviews": [
+    {
+      "sessionId": "01b4fc04-e436-4d20-9fb4-ac592d93e7d2",
+      "observedReadPaths": [
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/README.md",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_baseline_input.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_budget_exceeded_input.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_invalid_scope.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_invalid_json.txt",
+        "/mnt/d/agentProjet/secops-triage/packages/triage-memory/scripts/compact_investigation_context.py",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/source-hashes.json",
+        "/mnt/d/agentProjet/secops-triage/scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/02_prepare.v020.py",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/scripts/run-n8n-teamwork.sh",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/scripts/verify_evidence.py",
+        "/mnt/d/agentProjet/secops-triage/packages/triage-memory/triage_memory/context.py"
+      ],
+      "submissions": [
+        {
+          "criteria": [
+            {
+              "id": "T1-C1",
+              "status": "pass",
+              "notes": "通过。实际核对（只读源 + 命令工具）：\n(1) README.md 共 12 条编号结论（grep -cE '^[0-9]+\\. \\*\\*' = 12），全部带 文件:行 引用，超出“至少 8 条”要求。\n(2) v020 零命中已复现：`grep -rniE 'memory' scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/ | wc -l` = 0；`memory_context|memory_reference` 同样 = 0，且 README 写明检索方法与结果。\n(3) 8 个节点 prepare() 均在 :217 —— grep 'def prepare' *.v020.py 实测 01_initialize/02_prepare/02_prepare_loop/03_accept/03_accept_loop/04_merge/04_merge_loop/runtime 全部 :217；:231 为 context 组装首行、:262 为 context 末行、:263 为 json.dumps 返回 —— 逐节点 sed 核对 runtime/03_accept/04_merge 全部一致，README 引用精确无偏差。\n(4) 02_prepare.v020.py:246-251 实测为 execution_records 去重（:247 evidence_ids、:250 record.pop('result',None)、:251 record['evidence_id']=record['request_id']），README 明确“与 budget_chars 字符预算裁剪是两回事”，未夸大。\n(5) manifest.json:51 实测为 \"evaluation_status\": \"not_evaluated_unless_a_run_snapshot_matches\"，引用精确。\n(6) CLI 契约（compact_investigation_context.py）语义全部核对为真：0=ok/2=budget_exceeded 仍写文件/1=无效输入或写失败（:93 return 0 if status=='ok' else 2，:91 target.open('x') 非原子且不覆盖已存在输出，:94 except → return 1）；required 全文保留 / optional 按 cap 截断（:56 kept = text if item['required'] else text[:cap]）并保留原文 sha256（:58）；输出 sort_keys 紧凑 JSON 且 output_chars==len（:60-65 measure() 收敛）；memory_reference.role='historical_reference_not_current_evidence'（:39）。\n(7) memory 契约缺口核对为真：context.py:17-57 build_memory_context() 只产 schema_version/status/policy/retrieval_id/as_of/counts/similar_cases(+error)，确无 tenant/scenario/scenario_version/source 四字段，真实对象直喂 CLI 会命中 :33-38 校验而 exit 1；memory-context.schema.json 确为 additionalProperties=false 且 policy const='reference_only_no_label_copy'，与 constants.py:5 POLICY_VERSION='reference_only_no_label_copy/v1' 字符串不一致（README 如实指出，无 /v1 后缀）；investigation-context.schema.json 的 memory_reference 顶层确为 additionalProperties=false，其 context 子对象确未写 additionalProperties:false —— README 按实际文件如实写，未沿用交接里夸大的说法。\n(8) envelope-only 合成声明明确（README 第 7 条 + fixture note 字段 + unresolved 文本），未声称真实上游接通/未声称输出 schema 全量合规。\n(9) 字符裁剪≠模型 token 压缩：README 第 8 条 + CLI 帮助文本 “not a model token budget”，无“已压缩模型 token”表述。\n(10) 历史记忆与当前证据分离：README 第 9 条 + memory_reference.role 引用一致，声明不进 evidence。\n(11) 无“已端到端接通/已压缩模型 token”等不实表述。\n唯一瑕疵（不构成不实表述）：README 对 compact_investigation_context.py 的若干行号存在 3–5 行偏移（如把 --input/--output 必填标为 :76-78（实际 :81-82）、open('x') 标为 :86（实际 :91）、退出码标为 :88-95（实际 :93-96）、required/optional 截断标为 :51（实际 :56）、output_chars 标为 :58（实际 :60-65）、role 标为 :36（实际 :39）、memory_context 校验标为 :30-36（实际 :29-38，区间包含）、evidence 校验标为 :37-52（实际 :41-54，区间包含））。偏移量小且不一致，属手写近似而非系统性错位；所有语义断言本身经实测复核全部为真，v020/manifest/constants/context.py 等非 CLI 引用则全部精确。建议 T1 后续校正 CLI 行号，但不构成事实性错误。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/README.md",
+                "deployments/team-workbench-20261118/source-hashes.json",
+                "scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/02_prepare.v020.py",
+                "scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/runtime.v020.py",
+                "packages/triage-memory/scripts/compact_investigation_context.py",
+                "packages/triage-memory/schema/memory-context.schema.json",
+                "packages/triage-memory/schema/investigation-context.schema.json",
+                "packages/triage-memory/triage_memory/constants.py",
+                "packages/triage-memory/triage_memory/context.py"
+              ]
+            },
+            {
+              "id": "T1-C2",
+              "status": "pass",
+              "notes": "通过。实际核对 + 真实执行裁剪 CLI（写入 /tmp，未改交付目录）：\n(1) 四个 fixture 齐全且全合成。逐字段按 compact_investigation_context.py:15-52 核对：根字段 tenant/scenario/scenario_version/case_id/as_of 均非空字符串；instructions/constraints/unresolved 各含至少 1 条非空字符串；budget_chars>=1、optional_excerpt_chars>=0；evidence 各含 id/source/observed_at/text/required(bool)，且每条 evidence 的 tenant/scenario/case_id 与根一致（baseline tenant=synthetic-teamwork-20261118/scenario=web/case_id=synthetic-20261118-001；budget 用 case_id=-002；scope 用 -003，evidence 侧一一对应）。\n(2) 实测退出码逐项符合预期（本次独立执行，非沿用作者报告）：cli_baseline_input.json → rc=0 且写出输出文件；cli_budget_exceeded_input.json（budget_chars=1）→ rc=2 且仍写出输出文件（status=budget_exceeded）；cli_invalid_scope.json（memory_context.tenant='WRONG-TENANT-SCOPE-MISMATCH'）→ rc=1 且【无输出文件】，stderr='memory_context tenant mismatch'；cli_invalid_json.txt → rc=1 且【无输出文件】，stderr='Expecting property name enclosed in double quotes: line 1 column 3 (char 2)'。四个 fixture 分别得到 0/2/1/1 且非法 JSON 无输出文件。\n(3) 输出内容抽查：baseline status=ok、output_chars=1513 == 实际编码长度 1513、memory_reference.role='historical_reference_not_current_evidence'；required 证据 EV-SYN-001 长度 178 全保留（truncated=false、omitted=false）；optional EV-SYN-002 被截断为 3 字符（truncated=true）且保留原文 sha256。budget fixture：EV-SYN-B02 被置空并标 omitted=true、EV-SYN-B01 保留。确定性：同输入两次运行输出 sha256 完全相同（9be9b52303492ca704b7c476f852f11d30808ac328aa54910c1f960bf9c18735）。\n(4) required 文本确含中文多字节长文本（178 字符 > cap=3），optional 文本明显长于 cap=3，符合设计要求。\n(5) memory_context 四字段齐全（tenant/scenario/scenario_version/source=synthetic-fixture-20261118），baseline 与 budget 的前三者与根一致，历史 case_id 与根不同（符合“历史 case_id 可不同”）；scope fixture 故意的 tenant 不匹配正是负例用途。\n(6) README 明确标注 memory_context 四字段为“合成注入声明”，见 README 第 7 条、fixture 内 note 字段与 unresolved 文本，并声明不代表真实上游接通。\n(7) 真实数据检索零命中：对 fixtures/ 执行 grep -rniE '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}|https?://|\\.com|\\.net|\\.org|\\.cn' 无匹配；find 交付目录无 *.env*/*.key/*credential*；无真实告警样本或凭据。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/fixtures/cli_baseline_input.json",
+                "deployments/team-workbench-20261118/fixtures/cli_budget_exceeded_input.json",
+                "deployments/team-workbench-20261118/fixtures/cli_invalid_scope.json",
+                "deployments/team-workbench-20261118/fixtures/cli_invalid_json.txt",
+                "deployments/team-workbench-20261118/README.md",
+                "packages/triage-memory/scripts/compact_investigation_context.py"
+              ]
+            },
+            {
+              "id": "T1-C3",
+              "status": "pass",
+              "notes": "通过。实际核对（解析 workflow JSON + 读 n8n 2.47.7 节点源码）：\n(1) 节点类型枚举实测仅 7 个内置节点：n8n-nodes-base.manualTrigger / set(×2) / executeCommand / if / readWriteFile / noOp —— 无 httpRequest、无 AI/LangChain、无模型节点、无 bridge 节点。\n(2) 禁用关键字扫描（交付目录全量，grep -rniE）实测全 0：httpRequest、http://、https://、langchain/LangChain、openai、anthropic、ollama、gpt-、8798、8790、credentials、apiKey、api_key、password、secret、bearer、adapter。token 的 4 处命中全部是“字符裁剪≠模型 token 压缩”的中文说明文字；model_ 的 1 处是 README 引用的 v020 源码片段 route:'model'；bridge/桥接的 2 处均为否定式说明（“不接入外部模型适配器、桥接服务”）。workflow JSON 内无任何 credentials 字段（顶层仅 name/nodes/connections/settings/staticData/pinData/meta/tags）。\n(3) executeCommand command 实测含：显式 `cd /mnt/d/agentProjet/secops-triage &&`；python3 与 CLI 与 fixture 全用绝对路径；`--output {{ $json.OUT_PATH }}`；并用 `; echo CLI_EXIT:$?; echo OUT_PATH:{{ $json.OUT_PATH }}` 包裹避免非零退出使节点先失败。已从 n8n 源码确认该包裹有效：ExecuteCommand.node.js:128-131 在 error!==undefined 时抛错，而命令链末位 echo 退出 0，故不会触发；stdout 落在 $json.stdout（ExecuteCommand.node.js:133-136 输出 json:{exitCode,stderr,stdout}）。\n(4) 唯一输出路径：OUT_PATH 含 `{{ $runIndex }}`（证据/cli-out-{{ $runIndex }}.json）。已验证 $runIndex 是 n8n 表达式合法 DATA_ROOT（n8n-workflow/dist/esm/workflow-data-proxy.js:1359 $runIndex: this.runIndex；native-evaluation/grammar.js DATA_ROOTS 含 '$runIndex'）。脚本侧亦按时间戳命名日志。\n(5) if 分流实测按 CLI_EXIT=0：条件 leftValue={{ $json.stdout }}、rightValue='CLI_EXIT:0'、operation=string/contains；connections 中 IF 的 main[0]→Read CLI Output、main[1]→NoOp NonZero Branch，非零分支不回读。\n(6) 真分支 readWriteFile 读回输出：fileSelector={{ $json.stdout.match(/OUT_PATH:(\\S+)/)[1] }}，options.dataPropertyName=cli_output —— 参数名已对照 n8n-nodes-base/dist/nodes/Files/ReadWriteFile/actions/read.operation.js 确认正确（fileSelector、options.dataPropertyName）；If V2 节点透传原 item（IfV2.node.js:113-115 trueItems.push(item)），故 $json.stdout 在下游可用。\n(7) 脚本实测含 set -euo pipefail（:5）、N8N=/home/nice/.local/n8n/node_modules/.bin/n8n 绝对路径（:9）、N8N_USER_FOLDER=$(mktemp -d /tmp/teamwork-n8n-XXXXXX)（:19）、N8N_EXPRESSION_ENGINE=quickjs（:21）、import:workflow --input=$WORKFLOW（:32）与 execute --id=$WORKFLOW_ID --rawOutput（:39），原始输出重定向到 $EVIDENCE_DIR/import-*.log 与 exec-*.log（:25-26），退出码分别落 import-*.exitcode / exec-*.exitcode（:27-28, :33, :40）；set +e/set -e 正确包裹使非零退出不终止脚本。脚本不读 n8n 用户库/配置/凭据。\n(8) 说明性缺陷（不影响本条所列验收点，但影响业务状态分支实际取值）：readWriteFile 的 read 操作输出把文件内容放在 binary.cli_output，json 仅含 mimeType/fileType/fileName/fileExtension/fileSize（read.operation.js:143-152），从不做 JSON.parse；而 “Set Business Status” 用 {{ $json.cli_output.status }}、{{ $json.cli_output.memory_reference.role }}、{{ $json.cli_output.evidence.filter(...) }} 取值，这些路径在运行时为 undefined（正确取法应为 $binary.cli_output 后自行解析，或改用 executeCommand/Code 节点解析）。此为 T1 需修复项，建议 T2 在跑通时以实际日志确认并反馈。\n(9) 未执行项（明确标注）：本次未实际触发 n8n executeCommand 最小运行探针、未运行 run-n8n-teamwork.sh、未产生任何 evidence/ 执行结果；上述节点行为结论来自 n8n 2.47.7 静态源码核对（n8n --version 实测 2.47.7；command -v n8n 实测空、rc=1），按计划应由 T2 做运行探针确认。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json",
+                "deployments/team-workbench-20261118/scripts/run-n8n-teamwork.sh",
+                "deployments/team-workbench-20261118/README.md"
+              ]
+            },
+            {
+              "id": "T1-C4",
+              "status": "pass",
+              "notes": "通过。实际核对（python hashlib 逐条复算工作区当前内容）：\n(1) source-hashes.json 含 algorithm='sha256' 与 generated_at='2026-11-18T01:49:42Z'，files 共 17 条，每条含 path/bytes/sha256。\n(2) 17 条全部复算一致（sha256 与 bytes 双向比对，bad=[]）：v020 的 00_normalize_alert/01_initialize/02_prepare/02_prepare_loop/03_accept/03_accept_loop/04_merge/04_merge_loop/runtime.v020.py、manifest.json、build.v020.py 共 11 条；packages/triage-memory 的 scripts/compact_investigation_context.py、tests/test_investigation_context.py、schema/investigation-context.schema.json、schema/memory-context.schema.json、triage_memory/constants.py、triage_memory/context.py 共 6 条。\n(3) 覆盖要求全部满足：8 个 prepare 节点（含 runtime.v020.py）齐全、manifest.json 与 build.v020.py 齐全、CLI/两个 schema/tests/constants/context 齐全。README 引用的所有【源文件】均在覆盖范围内（交叉核对脚本输出的“未覆盖”项只有 T1 自己的交付产物 fixtures/*.json、workflow/*.json、scripts/verify_evidence.py 与临时路径 /tmp/out-*.json，属交付产物而非源引用，且已由 Host 单独记录 sha256）。\n(4) 哈希为工作区当前内容而非 git HEAD：复算直接对磁盘文件 bytes 做 sha256，且与 file bytes 全部吻合；例如 compact_investigation_context.py 4868 bytes / 1abe711fd9a7b90e7983d6a33a6f0e6b5d923fd900495eda869befdbe2c8fc02，与实测文件一致。\n(5) 禁收内容核对：source-hashes.json 内无交接材料（requirement.txt/opinion-*/synthesis.txt/plan.json/manifest.json 交接目录）、无 session/数据库文件、无 .env、无 evidence/private 路径；17 条 path 全部为 scenarios/ 与 packages/ 下的源码/契约文件。\n(6) 与 T2 的 evidence/11-source-hashes.json 对齐的前提已具备（同一工作区内容、同一算法），但 T2 的 evidence 目录当前不存在，本次未执行任何写入，暂无法做交叉比对；该对齐项须由 T2 产出后复核。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/source-hashes.json",
+                "deployments/team-workbench-20261118/README.md"
+              ]
+            },
+            {
+              "id": "T1-C5",
+              "status": "pass",
+              "notes": "通过。实际核对（git status --porcelain=v1 + 目录/内容检索）：\n(1) dirty 基线口径一致：git status --porcelain=v1 实测 total=3033、M=3025、??=8、D=0、A=0，完整输出 SHA-256=4275bd55c3f30d70d47f9462de78f81a7cd980af8209e7157bb6b51d1489cc9c，与交接记录的基线哈希逐字符相同；HEAD=17358d623cd35bee0b5bbf62c38805209094542f。\n(2) 8 个未跟踪项与基线完全一致，唯一新增的是 `?? deployments/team-workbench-20261118/`；其余 7 项（digital-team-context-20261117/、packages/scheduler/evidence/soak/...、packages/triage-memory/build/、schema/investigation-context.schema.json、scripts/compact_investigation_context.py、tests/test_investigation_context.py、triage_memory.egg-info/）均为基线既有项。M 数与基线相同（3025），说明交付目录外零新增/零修改；v020、packages/triage-memory、current/、生产配置、digital-team-context-20261117 均无本轮改动。\n(3) 交付目录内无 evidence/ 执行结果：ls deployments/team-workbench-20261118/evidence → No such file or directory（脚本运行时才 mkdir -p）。\n(4) 无通过性结论：grep -rniE '已通过|测试通过|PASS|已验证|acceptance.json' 命中 3 处，全为否定/免责语境 —— README:4「未执行测试、未写任何“已通过”结论」、README:125「旧实验的 PASS/日志/acceptance.json 不得作为本次证据」、README:133（描述 T2 后续职责）。无“已执行/已通过/已验证”断言。\n(5) 残留探针文件：.probe-write-check.tmp 当前不存在（已删除），README:6 明确记载“已清理前序阻塞会话残留空探针文件 .probe-write-check.tmp（确认为 0 字节后删除，该清理不属于业务交付物）”，符合规则。\n(6) 敏感内容：交付目录内 .env/密钥/真实告警检索仅命中 README 的禁止性说明与 fixture 的“不含真实域名、真实 IP 地址、真实凭据或真实告警样本”自述文本；find 无 *.env*/*.key/*credential*；无 evidence/private 内容。\n(7) 本次验收未修改任何交付产物（所有写操作限于 /tmp 临时目录）；未读取 .env、API 密钥、真实告警样本或 evidence/private/。\n(8) 说明：验收中途一次 git status 与另一次并发调用出现输出顺序差异与额外条目显示，经单独重跑并排序比对确认为 git 并行索引刷新造成的瞬时表现，非真实变更；最终连续三次独立复跑均为 3033 行 / 哈希 4275bd55…cc9c，与基线一致。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/",
+                "deployments/team-workbench-20261118/README.md",
+                "deployments/team-workbench-20261118/source-hashes.json"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sessionId": "4c934296-bf6e-43d2-8dfe-6a423a2ada36",
+      "observedReadPaths": [
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/README.md",
+        "/mnt/d/agentProjet/secops-triage/packages/triage-memory/scripts/compact_investigation_context.py",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_baseline_input.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_budget_exceeded_input.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/fixtures/cli_invalid_scope.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/scripts/run-n8n-teamwork.sh",
+        "/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118/scripts/verify_evidence.py"
+      ],
+      "submissions": [
+        {
+          "criteria": [
+            {
+              "id": "T1-C1",
+              "status": "fail",
+              "notes": "已读 README.md 全部 135 行并逐条对照只读源。核对通过的事项：v020 全目录 grep -rniE 'memory'=0、'memory_context|memory_reference'=0（grep 实测）；8 个控制节点 01_initialize/02_prepare/02_prepare_loop/03_accept/03_accept_loop/04_merge/04_merge_loop/runtime 的 prepare() 均在 :217，context 在 :231-262，:263 以 json.dumps 返回（02_prepare 与 runtime 的 217-263 段 diff 完全一致）；02_prepare.v020.py:246-251 是 execution_records 去重（pop result + 回填 evidence_id），与字符预算裁剪无关；manifest.json:51=evaluation_status=not_evaluated_unless_a_run_snapshot_matches；context.py:17-57 只产 schema_version/status/policy/retrieval_id/as_of/counts/similar_cases，不产 tenant/scenario/scenario_version/source 四字段；constants.py:5=reference_only_no_label_copy/v1 与 memory-context.schema.json:12 的 const=reference_only_no_label_copy 不一致；investigation-context.schema.json 的 memory_reference 顶层 additionalProperties:false、其 context 子对象确未写 additionalProperties（未夸大）；ExecuteCommand.node.js:31=cwd:process.cwd()；环境实测 python3=3.12.3、node=v26.13.1、/home/nice/.local/n8n/node_modules/.bin/n8n --version=2.47.7、command -v n8n 为空、WSL2 内核 6.6.114.1；git status 基线 sha256=4275bd55c3f30d70d47f9462de78f81a7cd980af8209e7157bb6b51d1489cc9c、3025 M + 8 ?? 完全一致。失败原因：README 中 CLI 契约一节（L30-L36、L48、L51）的文件:行引用系统性错位，无法在只读源对应位置核对：L30 写 --input/--output 在 :76-78（实际 :81-82）、source==target 在 :82-83（实际 :87-88）；L31 写根字段 :15-19（实际 :15-17）、列表 :20-22（实际 :18-20）、budget :23-25（实际 :21-24）；L32 写 memory_context :30-36（实际 :29-38）、历史 case_id 帮助文本 :76（实际 :80）、role/复制 :36（实际 :39）；L33 写 evidence :37-52（实际 :41-59）、required 全文与 sha256 :51（实际 :56/:58）；L34 写超预算置空 :54-63（实际 :66-75）；L35 写退出码 :88-95（实际 :93-96）；L36 写 open('x') :86（实际 :91）、output_chars==len 于 :58（实际 :60-65）；L48/L51 再次引用 :76/:36。另 L39 将“真实上游对象直接喂 CLI 会 exit 1”归因到 :30-36，实际会先因缺根 tenant 等字段在 :15-17 校验失败（exit 1 结论本身成立）。因此计划验收明确要求可核对的“CLI 退出码/非原子写/确定性”等关键结论行号错误，不满足“至少 8 条带 文件:行 的关键结论且可在只读源核对”；“不夸大未接通范围、envelope-only 合成注入声明、字符裁剪非 token 压缩”等表述合格。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/README.md",
+                "deployments/team-workbench-20261118/source-hashes.json"
+              ]
+            },
+            {
+              "id": "T1-C2",
+              "status": "pass",
+              "notes": "读取 4 个 fixture 并逐字段按 compact_investigation_context.py 校验；另在单次命令内用真实 CLI 实测（PYTHONDONTWRITEBYTECODE=1，输出写 /tmp）：baseline 输入 rc=0、status=ok、output_chars=1513，required 证据全文保留且 truncated=false，optional 文本按 optional_excerpt_chars=3 截断为“合成可”且 truncated=true、sha256 为原文哈希；budget_exceeded（budget_chars=1）rc=2 且仍写文件、status=budget_exceeded、optional 被置空 omitted=true、required 不动；invalid_scope（memory_context.tenant=WRONG-TENANT-SCOPE-MISMATCH）rc=1 且无输出文件、stderr=memory_context tenant mismatch；invalid_json.txt rc=1 且无输出文件、stderr=JSON 解析错误。附加验证：同输入两次输出 sha256 完全相同（确定性）；对已存在输出重跑 rc=1（[Errno 17] File exists，open('x') 覆盖写保护）。scope 检查：根 tenant=synthetic-teamwork-20261118、scenario=web、scenario_version=ndr-coze-v020、case_id 为 synthetic-*、as_of 为合成 ISO；两条 evidence 的 tenant/scenario/case_id 与根一致；memory_context 含 tenant/scenario/scenario_version/source 且前三者与根一致，source=synthetic-fixture-20261118；README L42/L45/L92 明确四字段为“合成注入声明/不代表真实上游接通”，fixture 内 memory_context.note 亦标注。敏感信息扫描（IP 正则、URL/域名、邮箱、password/api_key/secret/token/bearer/credential、AKIA/PRIVATE KEY）在 fixture 均无真实值（仅出现“模型 token 压缩”等说明性中文与 README 中 WSL 内核版本串，非 IP）；全部为合成数据。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/fixtures/cli_baseline_input.json",
+                "deployments/team-workbench-20261118/fixtures/cli_budget_exceeded_input.json",
+                "deployments/team-workbench-20261118/fixtures/cli_invalid_scope.json",
+                "deployments/team-workbench-20261118/fixtures/cli_invalid_json.txt",
+                "deployments/team-workbench-20261118/README.md"
+              ]
+            },
+            {
+              "id": "T1-C3",
+              "status": "fail",
+              "notes": "解析 workflow JSON：7 个节点仅 manualTrigger/set/executeCommand/readWriteFile/if/noOp；对 workflow 与 run-n8n-teamwork.sh 扫描 httpRequest/http/https、LangChain/AI、bridge、8798/8790、credentials、apiKey/api_key/bearer/password/secret、model 均无命中（'port' 命中仅为 import 子串）；command 含显式 cd、CLI 与 fixture 绝对路径、OUT_PATH/CLI_EXIT 输出；IF 以 $json.stdout contains 'CLI_EXIT:0' 分流；脚本含 set -euo pipefail、N8N=/home/nice/.local/n8n/node_modules/.bin/n8n、N8N_USER_FOLDER=$(mktemp -d /tmp/teamwork-n8n-XXXXXX)、N8N_EXPRESSION_ENGINE=quickjs、import:workflow --input、execute --id --rawOutput，原始输出与退出码落交付目录 evidence/。不通过项：(1) 唯一输出不成立——OUT_PATH=evidence/cli-out-{{ $runIndex }}.json（workflow L19），$runIndex 是单次执行内的 run 索引，跨执行恒为 0，第二次运行必然撞已有 cli-out-0.json，CLI 的 open('x') 会 exit 1，不满足“每次运行唯一输出路径（含时间戳/执行 id 表达式）”；(2) workflow JSON 无 id 字段（仅 name/meta.instanceId=teamwork-20261118-compact），而脚本 L11/L39 硬编码 WORKFLOW_ID=teamwork-20261118-compact 并 execute --id；实测 n8n 2.47.7 在隔离 N8N_USER_FOLDER 导入该 workflow 成功但生成随机 16 位 id（本次 list:workflow 为 AFWTPCMI2EcpEGhJ，另一次为 Qc0x8GtkzT4xiiaR），n8n 的 execute.js 按 id 查库、查不到即 process.exit(1)，实测执行 --id=teamwork-20261118-compact 返回 rc=1 且日志为 The workflow with the id \"teamwork-20261118-compact\" does not exist，故该脚本每次 import 后 execute 必失败；(3) command 中 python3 未用绝对路径（/usr/bin/python3 实际存在），不满足“绝对路径调用 python3、CLI 与 fixture”的任务要求。另发现静态缺陷（供 T2 参考，不单独计入）：readWriteFile 的 read 操作把文件内容放入 binary[dataPropertyName]，json 仅含 mimeType/fileName 等元数据（ReadWriteFile/actions/read.operation.js L142-152），故成功分支 Set Business Status 的 $json.cli_output.status 等表达式无法解析；且 n8n v2 默认禁用 executeCommand（NODES_EXCLUDE 未设置时 disabled-nodes.rule.js L13-16；实测同节点副本执行报 Unrecognized node type: n8n-nodes-base.executeCommand），按计划 T2 的 executeCommand 运行探针预计 blocked，不得改沙箱/权限/安全设置。为避免向交付目录写 evidence/，我未直接运行交付脚本，仅在 /tmp 隔离 user folder 用同一 workflow JSON 做 import/list 与同节点副本执行，未改动交付产物。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/workflow/teamwork-compact.workflow.json",
+                "deployments/team-workbench-20261118/scripts/run-n8n-teamwork.sh"
+              ]
+            },
+            {
+              "id": "T1-C4",
+              "status": "pass",
+              "notes": "解析 source-hashes.json：algorithm=sha256、generated_at=2026-11-18T01:49:42Z、17 条 files（path/bytes/sha256）。用 python3 hashlib 对工作区当前文件逐条复算 bytes 与 sha256，17/17 全部一致（含 00_normalize_alert、01_initialize、02_prepare、02_prepare_loop、03_accept、03_accept_loop、04_merge、04_merge_loop、runtime、manifest.json、build，以及 compact_investigation_context.py、test_investigation_context.py、investigation-context.schema.json、memory-context.schema.json、constants.py、context.py）。路径均为仓库相对路径，不含交接材料、session/数据库、.env、evidence/private。README 中对仓库内文件（8 节点、runtime、manifest、CLI、两份 schema、constants、context）的引用均有对应条目；README 引用的 ExecuteCommand.node.js 位于 /home/nice 外部系统路径，按任务“以仓库相对路径为键”的要求未收录，属预期外系统文件而非仓库源。补充观察：README L83 称“17 个被引用源文件”，实际 README 未逐一引用 00_normalize_alert/build/test_investigation_context（build 只在综述中提及），措辞偏宽，但 source-hashes 为超集且覆盖验收清单全部要求，不影响本项通过；与 T2 未来 evidence/11-source-hashes.json 的跨步对齐需待 T2 产生后才能验证，不作为 T1 失败。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/source-hashes.json",
+                "deployments/team-workbench-20261118/README.md"
+              ]
+            },
+            {
+              "id": "T1-C5",
+              "status": "pass",
+              "notes": "边界实测：git status --porcelain=v1 重跑输出 sha256=4275bd55c3f30d70d47f9462de78f81a7cd980af8209e7157bb6b51d1489cc9c、3033 行=3025 M + 8 ??，与 dirty 基线逐字节一致；交付目录外无工作区新增/修改，交付目录整体为唯一新增未跟踪项。受保护路径 mtime 检查：v020 目录全部为 2026-11-14 23:01、packages/triage-memory 最晚 2026-11-17 22:00、deployments/digital-team-context-20261117 最晚 2026-11-17 22:02，current/ 不存在，均无本轮新增修改。交付目录仅 9 个文件，无 evidence/ 执行结果；.probe-write-check.tmp 不存在，README L6 记录“确认为 0 字节后删除”并说明不属业务交付物。README 仅写“待测试员工执行/本节点未执行测试、未写通过性结论”（L4/L126/L132），并明确旧实验 PASS/日志/acceptance.json 不得作为本次证据（L125），无“已验证/已通过”表述。交付内容扫描无真实域名/IP/凭据/真实告警/evidence/private 数据（唯一疑似 IP 命中为 README 中 WSL 内核版本 6.6.114.1 字符串）。观察（非 T1 增量，不判失败）：审查开始前 HEAD 已从基线记录的 17358d6 变为 82d51d8（2026-11-18 10:09:15，作者 liuerge，提交信息“Record user-described alert classification background”，新增 docs/业务口径-告警分类边界-20261118.md）；该文件 mtime 10:08:32 晚于 T1 末次产物 10:01:43，内容与本任务无关，且已提交故不再出现在 git status，判定为其他角色写入而非 T1 员工，请 lead 知悉。本次审查全程未写入工作区：10:12 之后仓库无任何文件变更，git status 哈希不变，CLI/n8n 验证均在单次命令的临时目录内完成（该环境 /tmp 每次调用隔离，原始输出未留盘，结果已记录于 notes）。",
+              "evidencePaths": [
+                "deployments/team-workbench-20261118/README.md",
+                "deployments/team-workbench-20261118/source-hashes.json"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

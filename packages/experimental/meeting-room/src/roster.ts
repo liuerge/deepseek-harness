@@ -22,3 +22,14 @@ export const teamSchema = z.object({
   memberIds: z.array(z.string().min(1).transform(id => brandString<EmployeeId>(id))).min(1)
     .refine(ids => new Set(ids).size === ids.length, 'Each employee appears once.'),
 })
+
+/** Durable conversation planning defaults, including an explicit cleared preference. */
+export const sessionTeamSelectionSchema = z.object({
+  revision: z.number().int().positive(), team: teamSchema.nullable(), employees: z.array(employeeSchema),
+}).superRefine((value, context) => {
+  const members = value.team?.memberIds ?? []
+  if (members.length !== value.employees.length
+    || members.some((id, index) => value.employees[index]?.id !== id)) {
+    context.addIssue({ code: 'custom', message: 'The selected team must capture its exact ordered membership.' })
+  }
+})

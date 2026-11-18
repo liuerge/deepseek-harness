@@ -48,11 +48,11 @@ it.each([0, 1])('keeps both review generations and routes only authorized repair
   expect(openWorker).toHaveBeenCalledWith('main', 'repair-worker')
 })
 
-it('shows the Team task association and warns when the execution was not mirrored', () => {
+it.each(['running', 'awaiting-direction'])('shows the Team task association and main-assistant direction state: %s', (state) => {
   const records: ProjectCheckpoint[] = [
     { sessionId: 'main', projectId: 'project', checkpoint: 1, state: 'started', goal: 'Team project', teamLink: 'disabled',
       tasks: [{ role: 'Writer', instruction: 'Write', acceptance: 'Check' }] },
-    { sessionId: 'main', projectId: 'project', checkpoint: 2, state: 'running', index: 0,
+    { sessionId: 'main', projectId: 'project', checkpoint: 2, state, index: 0,
       teamTask: { id: 'task-3', revision: 2, status: 'in_progress' } },
   ]
   const catalog = { records, connections: [], connectionsLoading: false, connectionsFailed: false,
@@ -67,6 +67,12 @@ it('shows the Team task association and warns when the execution was not mirrore
   } as Parameters<typeof ProjectPage>[0]} />)
   expect(screen.getByText(zh['project.team-disabled'])).toBeTruthy()
   expect(screen.getByText('Team 共享任务 task-3 · 执行中')).toBeTruthy()
+  if (state === 'awaiting-direction') {
+    expect(screen.getByText(zh['project.awaiting-direction'])).toBeTruthy()
+    expect(screen.queryByRole('button', { name: zh['review.continue'] })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: zh['project.correct-main'] }))
+    expect(noop).toHaveBeenCalledWith('main', 'project')
+  }
 })
 
 it('separates participant opinions from recorded main-assistant conclusions and opens the exact participant conversation', () => {

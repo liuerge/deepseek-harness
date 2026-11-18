@@ -565,7 +565,7 @@ export interface Config {
 ```ts config-catalog
 /** Application-owned collection policy; no user settings surface. */
 export interface Config {
-  /** Live application collection policy; ordinary Web does not mount this service. */
+  /** Live application collection policy, disabled by default; ordinary Web does not mount this service. */
   enabled: Volatile<boolean>
   /** Running Desktop release, absent when unavailable. */
   appVersion?: string
@@ -2632,9 +2632,9 @@ export interface McpManagedServerEntry {
 
 ## `@deepseek-ai/dsh-meeting-room`
 
-- `inject`: `agents` · `subagents` · `tools` · `workingDirectory` · `fs`
+- `inject`: `agents` · `subagents` · `tools` · `workingDirectory` · `fs` · `systemPrompt`
 - `refs`: `z` (`zod`)
-- `source`: [`packages/experimental/meeting-room/src/index.ts:34`](../packages/experimental/meeting-room/src/index.ts)
+- `source`: [`packages/experimental/meeting-room/src/index.ts:35`](../packages/experimental/meeting-room/src/index.ts)
 
 ```ts config-catalog
 /** Validated meeting defaults after schema defaults. */
@@ -3216,7 +3216,7 @@ export interface JsonRpcConfig {
 ```ts config-catalog
 /** Session-log request contribution configuration. */
 export interface Config {
-  /** Contribute `dsh_session_log` to official DeepSeek requests. Defaults to `true`. */
+  /** Contribute `dsh_session_log` to official DeepSeek requests. Defaults to `false`. */
   enabled: Volatile<boolean>
   /**
    * Largest serialized `dsh_session_log` field, in UTF-8 bytes, that one request carries.
@@ -3393,7 +3393,7 @@ export interface Config {
  * and shutdown deadline at plugin load; `DISABLED` reads neither.
  */
 export interface Config {
-  /** Defaults to `FEEDBACK_ONLY`: capture session history only when feedback is explicitly submitted. */
+  /** Defaults to `DISABLED`; `FEEDBACK_ONLY` captures session history only when feedback is explicitly submitted. */
   mode?: SessionTelemetryMode
   /**
    * Explicit SDK HTTP transport settings, including optional routing headers.

@@ -1,0 +1,168 @@
+# 需求与方案员工意见（第一阶段：讨论与计划，只读完成）
+
+**只读声明**：本阶段我未写任何文件、未执行命令、未运行测试、未启动任何服务；仅用只读文件访问读取了下列文件。除读取外没有其他操作。
+
+## 一、实际读取的文件（证据清单）
+
+- 协作规则与背景：[AGENTS.md](AGENTS.md)、[docs/项目背景与需求.md](docs/项目背景与需求.md)、[docs/当前基线.md](docs/当前基线.md#L110-L114)、[docs/决策记录.md](docs/决策记录.md#L215-L220)（DR-020）、[docs/系统架构与环境边界.md](docs/系统架构与环境边界.md#L111-L117)
+- v020 冻结源文件清单与节点：[manifest.json](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/manifest.json)、[runtime.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/runtime.v020.py#L217-L263)、[01_initialize.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/01_initialize.v020.py#L467-L476)、[02_prepare.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/02_prepare.v020.py#L467-L476)、[03_accept.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/03_accept.v020.py#L467-L476)、[04_merge.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/04_merge.v020.py#L467-L476)、[00_normalize_alert.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/00_normalize_alert.v020.py)
+- 记忆与裁剪：[packages/triage-memory/README.md](packages/triage-memory/README.md#L132-L136)、[compact_investigation_context.py](packages/triage-memory/scripts/compact_investigation_context.py#L12-L100)、[investigation-context.schema.json](packages/triage-memory/schema/investigation-context.schema.json)、[memory-context.schema.json](packages/triage-memory/schema/memory-context.schema.json)、[test_investigation_context.py](packages/triage-memory/tests/test_investigation_context.py)、[context.py](packages/triage-memory/triage_memory/context.py#L17-L79)、[constants.py](packages/triage-memory/triage_memory/constants.py#L1-L6)
+- 仅作背景、不得作为本次证据：[digital-team-context-20261117/README.md](deployments/digital-team-context-20261117/README.md)、[run-n8n.sh](deployments/digital-team-context-20261117/dsh-capture/run-n8n.sh)、[docs/n8n记忆影子验证-20261116.md](docs/n8n记忆影子验证-20261116.md#L5-L38)
+
+## 二、从文件中确认的事实（决定方案的关键点）
+
+1. **v020 冻结源共 22 个文件，manifest 为 21 个源文件登记 `source_hashes`**；主控制节点为 `00_normalize_alert`、`01_initialize`、`02_prepare`、`03_accept`、`04_merge`（另有 loop 版本）。所有节点以 `handler(params)` 收参，`initialize` 的 state 明确不含 `memory_context`（[01_initialize.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/01_initialize.v020.py#L70-L77)）。
+2. **记忆接入点是 `prepare` 之后、模型调用之前**：`prepare()` 返回 `model_user_input` 字符串（[runtime.v020.py](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/runtime.v020.py#L262-L263)），本身没有记忆字段。因此接入必须是“冻结节点之外的包装/接线”，不能改 v020 源。
+3. **裁剪 CLI 契约**（[compact_investigation_context.py](packages/triage-memory/scripts/compact_investigation_context.py#L12-L100)）：
+   - 根字段必须含 `tenant/scenario/scenario_version/case_id/as_of/instructions/constraints/unresolved/budget_chars/optional_excerpt_chars/evidence`；
+   - `evidence[*]` 必含 `id/source/observed_at/text/required`，且 `tenant/scenario/case_id` 必须等于根；`required=true` 原文完整保留，`optional` 按 `optional_excerpt_chars` 截断或置空；
+   - `memory_context` 若出现，必须有 `tenant/scenario/scenario_version/source`，前三者必须等于根，历史 `case_id` 可不同；CLI **原样拷贝整个对象**进 `memory_reference.context`；
+   - 退出码：`0` 成功、`2` `budget_exceeded`（写入文件但下游必须阻断）、`1` 输入/写入错误（不保证无残留、不得覆盖已存在输出，`open('x')`）；`output_chars` 是确定性字符数，不是模型 token 预算；**不是原子写**，调用方必须等 exit 0 再解析 JSON。
+4. **发现两处契约不一致（本阶段只记录，不修）**：
+   - `memory-context.schema.json` 要求 `policy` 常量为 `reference_only_no_label_copy`，而代码 `POLICY_VERSION` 为 `reference_only_no_label_copy/v1`（[constants.py](packages/triage-memory/triage_memory/constants.py#L3-L6)）；
+   - `memory-context.schema.json` 是 `additionalProperties:false` 且不含 `tenant/scenario/scenario_version/source`；而裁剪 CLI 要求并原样保留这些 scope 字段，`investigation-context.schema.json` 的 `memory_reference.context` 又只允许这 4 个字段 + `additionalProperties:false`。**即：把完整检索上下文（含 `policy/counts/similar_cases`）传给裁剪 CLI，输出必然不满足 investigation-context schema**。必须由需求明确“传给裁剪的 memory_context 是 envelope-only，还是完整检索上下文”。
+   - 另外，CLI 代码并未 import/读取 schema 文件，“按 schema 校验”是文档表述，验收时需明确以 CLI 实际校验规则为准，避免误判。
+5. **测试基线**：[test_investigation_context.py](packages/triage-memory/tests/test_investigation_context.py) 共 5 个测试方法（确定性/必需保留、超预算与省略、9 类 scope 拒绝、预算边界与文件保护、非法输入），覆盖 scenario=`rasp` 的模块行为，**不覆盖 NDR/web 接入**，也不校验输出是否符合 schema。
+6. **历史实验的定位**：DR-020 明确“冻结 v020 与 current 保持原样，使用来源 SHA 校验的独立副本验证；n8n 是本地等价模拟，不是生产编排”。背景实验证明了 WSL n8n 2.47.7 + 隔离 `N8N_USER_FOLDER` + `import:workflow`/`execute --id` 的可行性，但其模型调用依赖 bridge/DSH 路由；本次要求不依赖模型适配器/bridge，因此是**新的、更小的流程**，旧证据不可复用。
+
+## 三、本次小交付的需求边界
+
+**范围内**
+1. 一份研发说明：基于实际文件写清 v020 记忆接入点、`memory_context` 的形态与放置位置、裁剪 CLI 的输入/输出/退出码/失败语义、谁负责 scope、哪些内容绝不可进入证据字段。
+2. 全合成 fixture：v020 输入（如 `original_log`/`f5_context`）、`memory_context`（明确标注 synthetic / `dataset=test` 或 source 标明合成）、裁剪输入（必需+可选证据、预算、scope）、超预算负例、scope 不一致负例；全部使用保留域名/文档保留 IP/合成租户。
+3. 一条**不依赖外部模型/bridge** 的 n8n 合成流程 JSON + 可复核运行脚本；只使用内置节点（trigger/set-or-code/read-write-file/execute-command/if），通过 WSL 独立临时 `N8N_USER_FOLDER` 执行 `import:workflow` + `execute --id`，保存命令、原始输出、退出码。
+4. 实际运行 `test_investigation_context.py` 聚焦测试（期望 5 项 OK）。
+5. 实际运行裁剪 CLI 正向/负向（`0/2/1`）并保存原始输出；对必需证据原文做 SHA-256 复核、二次运行字节一致、覆盖写保护验证。
+6. 每节点由**不同员工**读真实产物独立验收，写入验收记录；证据不足一律 `blocked`，不得口头通过。
+7. 所有产物只写入 `deployments/team-workbench-20261118/`。
+
+**不在范围内**
+- 修改 v020 冻结源/`current`/生产配置/记忆提示词版本/`packages/triage-memory` 代码或测试；不部署、不推送远端、不改 `deployments/digital-team-context-20261117/`。
+- 真实模型调用、bridge、真实工具、ES/Redis 检索、embedding/向量、长轨迹语义压缩效果、生产 Coze 发布；不做界面或 DSH GUI 验证。
+- 不新增/修复 schema 与 CLI 的不一致（只作为已知问题记录）。
+- 不读 `.env`、API 密钥、真实告警样本、`evidence/private/`；不把旧实验的 `acceptance.json`/日志当作本次执行证据。
+
+## 四、接入方案建议（写进研发说明的骨架）
+
+**数据流（不修改任何冻结节点）**：
+
+```
+v020 输入(合成) → 01 initialize → 02 prepare（产出 model_user_input）
+                                      ↓
+                       接线层：组装裁剪输入
+                       { tenant, scenario, scenario_version, case_id, as_of,
+                         instructions, constraints, unresolved, budget_chars,
+                         optional_excerpt_chars,
+                         evidence:[{id:"model-input", source:"v020 prepare",
+                                    observed_at, required:true, text:model_user_input,
+                                    tenant,scenario,case_id}],
+                         memory_context: <envelope> }
+                                      ↓
+               compact_investigation_context.py --input / --output
+                                      ↓
+                  exit 0 + JSON 解析成功 → 方可继续
+                  exit 2 / exit 1 / 解析失败 → 立即阻断（DR-020 失败语义）
+                                      ↓
+        模型可见上下文 = 压缩输出 evidence[0].text（必需证据原文不变）
+                       + 独立的“历史相似案例参考”提示块（来自记忆检索结果，非证据）
+        压缩输出中的 memory_reference.role = historical_reference_not_current_evidence
+```
+
+**记忆形态建议（需用户确认，见待定点 4）**：
+- 传给裁剪 CLI 的 `memory_context` 采用 **envelope-only**：`{tenant, scenario, scenario_version, source}`（可加历史 `case_id`），这样输出满足 `investigation-context.schema.json`；
+- 完整检索对象（`policy/counts/similar_cases`，即 [context.py](packages/triage-memory/triage_memory/context.py#L17-L57) 的产物）只用于生成“历史参考”提示块，不进入 `evidence`，也不进 `key_Evidence`；
+- 在研发说明中明确记录“完整检索对象直接传给 CLI 会导致 `memory_reference.context` 多字段、违反 output schema”，作为已知缺口和本次验收的边界说明。
+
+**失败语义（必须写死）**：exit 2 与 exit 1 均不得进入后续模型/后续节点；不得用“文件已出现”判断成功；输出文件不得覆盖已有文件；每次运行用唯一输出名。
+
+## 五、可验收任务拆分与验收标准草案
+
+建议 4 个节点、4 个不同员工；写作用范围互不重叠。
+
+### T1 研发说明节点（开发员工）
+
+产出（全部在 `deployments/team-workbench-20261118/`）：`README.md`（研发说明/复现步骤/边界）、`fixtures/**`、`workflow/ndr-v020-memory-compact.workflow.json`、`scripts/run-n8n.sh`、`scripts/verify-evidence.py`（只读校验器）、`source-hashes.json`（v020 21 个源文件 SHA-256 快照）。**不得写 `evidence/`、不得声称已执行。**
+
+验收标准草案（由独立验收员工读文件判定）：
+- **A1 边界**：交付目录外无新增/修改；`README.md` 明确“n8n 仅为本地测试工具，非生产编排平台”“历史记忆仅参考、非本案证据”“未修改 v020/current/生产”。
+- **A2 源固定**：`source-hashes.json` 的 21 条与 [manifest.json](scenarios/ndr/snapshots/research-ndr-v3/coze_nodes/versions/v020/manifest.json) 的 `source_hashes` + `files` 映射逐条一致；验收员工用同一算法重算（`hashlib.sha256`）比对，无差异。
+- **A3 合成无害**：fixture 无真实域名/IP/凭据；grep 不含 `password/token/authorization/api_key` 值、`192.168`/真实公网域名；租户/案例/来源均带 synthetic 标识；`dataset` 语义标注为合成。
+- **A4 无外部依赖**：workflow JSON 可解析；节点类型仅内置（如 `manualTrigger`/`code`/`set`/`readWriteFile`/`executeCommand`/`if`）；不存在 `httpRequest`、任何 LLM/模型节点、bridge 端口（8798/8790）、`credentials` 字段。
+- **A5 命令可复核**：`run-n8n.sh` 含 `set -euo pipefail`、`N8N_USER_FOLDER=$(mktemp -d ...)`、`N8N_EXPRESSION_ENGINE=quickjs`、`import:workflow --input=...`、`execute --id ... --rawOutput`、原始输出重定向到 `evidence/`；无硬编码用户家目录，n8n/Node 用 `command -v`/候选路径发现。
+- **A6 文档与实际一致**：README 对退出码（0/1/2）、非原子写、scope 必须匹配、必需证据不可裁剪、`memory_reference.role` 的描述与 CLI 源码逐条对应（验收员工交叉核对源码行）。
+- **A7 未越权**：T1 目录内不含 `evidence/` 执行结果、不含任何“已验证/已通过”结论性文字（只能写“待测试员工执行”）。
+- **A8 验收记录完整**：README 指定每个节点的负责人、产出路径、验收入口、失败记录位置。
+
+### T2 测试执行节点（测试员工）
+
+前置 P0（全部通过才允许继续，任一失败即写 `blocked`）：
+```bash
+# 1) WSL 与版本
+wsl.exe -l -v
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'uname -a; python3 --version; node --version; command -v n8n || ls "$HOME/.local/n8n/node_modules/.bin/n8n"'
+# 2) 隔离临时目录
+wsl.exe -d Ubuntu-24.04 -- bash -lc 't=$(mktemp -d /tmp/team-workbench-n8n-XXXXXX); [ -w "$t" ] && rmdir "$t" && echo temp-ok'
+# 3) 唯一交付目录可写（/mnt/d 挂载）
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'd=/mnt/d/agentProjet/secops-triage/deployments/team-workbench-20261118; touch "$d/.wsl-probe" && rm "$d/.wsl-probe" && echo writable'
+# 4) Execute Command 节点存在（不依赖模型/HTTP 的关键）
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'ls "$HOME/.local/n8n/node_modules/n8n-nodes-base/dist/nodes/ExecuteCommand"'
+# 5) 固定源完整性（只读）
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/agentProjet/secops-triage && PYTHONDONTWRITEBYTECODE=1 python3 scripts/../ -c ""' # 实际用 T1 的 source-hashes 校验命令
+```
+执行项：
+1. 聚焦测试（Windows 或 WSL 均可）：
+   ```bash
+   wsl.exe -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/agentProjet/secops-triage && PYTHONDONTWRITEBYTECODE=1 python3 packages/triage-memory/tests/test_investigation_context.py -v'
+   ```
+   期望 `Ran 5 tests` + `OK`，exit 0；保存完整原始输出。
+2. 裁剪 CLI 正向：合成 fixture（NDR `scenario=web`、`scenario_version=ndr-coze-v020`）→ 期望 exit 0、`status=ok`、必需证据原文逐字节保留且 `sha256` 与原文一致、可选文本截断、`memory_reference.role` 正确；二次运行到新文件字节一致；对已存在输出再跑期望 exit 1 且原文件不变。
+3. 裁剪负向：`budget_chars=1` → exit 2 + `status=budget_exceeded` + 必需证据仍在；`memory_context.tenant/scenario/scenario_version` 不匹配 → exit 1 且不产生输出文件；非法 JSON → exit 1。
+4. n8n：`run-n8n.sh` 执行（独立临时 `N8N_USER_FOLDER`，import + execute，`--rawOutput` 落盘）；记录 `N8N_USER_FOLDER` 实际路径、n8n/Node 版本、import 日志、execute 原始 JSON、CLI exit code。
+5. 业务侧断言（不得只看 n8n exit 0）：workflow 内校验节点产出 `compact_exit=0`、`status=ok`、`memory_reference.role=historical_reference_not_current_evidence`、必需证据 SHA 一致；`n8n` 成功 ≠ 业务通过。
+6. 失败记录追加写入 `failures.md`（命令、时间、环境、exit code、stderr 原文），不覆盖历史失败。
+
+验收标准草案（由另一名独立验收员工读真实产物判定）：
+- **B1 前置证据**：P0 每项都有命令、原始输出、exit code；若失败只能 `blocked` 并给出具体错误。
+- **B2 测试证据**：原始输出含 5 项测试结果、`OK`、exit 0；无 skip；时间戳在计划确认之后；运行前后 `packages/` 无新 `.pyc`（`PYTHONDONTWRITEBYTECODE=1`）或已记录例外。
+- **B3 裁剪正向证据**：命令/退出码/输出 JSON/`output_chars==len(字符串)`/必需证据 `sha256` 与源文本一致/二次运行 `cmp` 相同/覆盖写 exit 1 且原文件字节不变。
+- **B4 负向证据**：exit 2 与 exit 1 的原始 stderr、输出文件存在性与内容符合契约；`budget_exceeded` 时必需证据未被裁剪。
+- **B5 n8n 证据**：`import` 成功日志、`execute` 原始输出、所有节点 `executionStatus=success`、业务断言节点通过、实际 `N8N_USER_FOLDER` 是新建临时目录（非已有数据库环境）、日志中无模型/bridge/HTTP 调用。
+- **B6 可复核性**：每条结论都能映射到“命令 + 原始输出 + 文件路径 + sha256”；存在任何缺失即 `blocked`。
+- **B7 边界与脱敏**：无 `.env`/密钥/真实样本；写入仅限交付目录和 `/tmp` 临时目录；对 `scenarios/`、`packages/` 无写入（用前后只读快照/`git status --porcelain` 证据验证）。
+- **B8 与旧实验隔离**：证据时间戳、run_id、临时目录、文件 sha256 均与 `deployments/digital-team-context-20261117/` 不同；README/验收记录不得用旧 `acceptance.json` 作为本次证据。
+
+### T3、T4 独立验收节点（各由不同员工）
+
+- T3 只读 T1 产物写 `acceptance/T1-review.md|json`；T4 只读 T2 证据写 `acceptance/T2-review.md|json`；两者只写各自验收文件，不改被审产物。
+- 判定枚举 `pass/blocked`；`blocked` 必须写明缺失证据与影响；不得口头通过、不得代写被审证据。
+
+## 六、风险与前置校验（含 Windows 权限、WSL/n8n 可用性）
+
+| 风险 | 影响 | 处理（写入计划） |
+|---|---|---|
+| 本会话/后续会话命令执行被 Windows 文件权限或沙箱阻塞 | 测试节点无法启动，或 WSL 无法写 `/mnt/d` | P0 前置门禁先验证；失败就写 `blocked` 并上报，不重试规避、不改用未授权路径、不口头通过（本会话审批已禁用，不能现场提权） |
+| WSL 发行版名/路径变化（历史用 Ubuntu-24.04、`~/.local/n8n`，且基线曾记录 WSL 不可达） | `wsl.exe`/`n8n` 找不到 | 不假设版本：动态 `wsl.exe -l -v` + `command -v n8n`，记录实际发行版、Node、n8n 版本；版本不符即 `blocked` |
+| n8n 2.47.7 + Node 26 的 vm 引擎不可用 | workflow 无法执行 | 显式 `N8N_EXPRESSION_ENGINE=quickjs`（背景实验已证实必要），并在 P0 记录引擎设置与版本 |
+| `Execute Command` 节点不可用/被 exclude | 无法在流程内实际调用裁剪 CLI | P0 检查节点目录；不可用则 `blocked`（备选方案须用户确认，不得改为伪造结果） |
+| n8n 进程内部 IPC/命名管道在受限沙箱下失败 | `execute` 起不来 | P0 试跑一次最小导入/执行；失败即记录为环境阻塞 |
+| n8n `execute` exit 0 但业务失败 | 误判通过 | 强制业务断言（exit code/JSON/role/sha256），禁止只看 n8n 状态 |
+| 裁剪 CLI 非原子写/不覆盖 | 读到半成品或被 `x` 模式拒绝 | 唯一输出名 + 等 exit 0 + 解析校验；覆盖写单独作为保护性测试 |
+| `memory-context` 契约不一致（policy 常量、scope 字段与 `additionalProperties:false`） | 若按完整检索对象验收会“必然失败”或误判 | 计划明确 memory_context 形态（建议 envelope-only）；把完整对象→schema 的差异记录为已知缺口，不修改 schema/代码 |
+| NDR 语义被模块测试掩盖（测试用 `scenario=rasp`，CLI/测试不校验 output schema） | 误以为 NDR 已验 | 额外要求 NDR `scenario=web` 合成 fixture 的 CLI 实跑 + 独立的只读 schema 子集校验证据 |
+| 旧实验证据被当成本次执行 | 交付不真实 | run_id 前缀 `team-workbench-20261118-`、全新时间戳/临时目录、验收 B8 逐项比对；旧目录只允许作为背景引用 |
+| 输出目录漂移 | 违反硬边界 | 交付只写 `deployments/team-workbench-20261118/`；验收用 `git status --porcelain` 前后快照证据确认 |
+
+## 七、需要用户确认的待定点（建议值）
+
+1. **命令执行授权**：第二阶段是否允许测试员工执行 `wsl.exe`、本地 Python CLI，并只写 `deployments/team-workbench-20261118/` 与 `/tmp`？若被沙箱拒绝，按“阻塞记录 + 等用户处理”执行（建议默认此处理）。
+2. **合成数据口径**：建议 `tenant=synthetic-tenant`、`scenario=web`、`scenario_version=ndr-coze-v020`、`case_id=synthetic-20261118-001`、memory `source` 明确写 `synthetic-fixture-*`；请确认（`scenario=web` 是 v020 `initialize` 支持值）。
+3. **是否重跑 v020 控制节点**：本小交付建议只做“prepare 输出 → 压缩/记忆标记”的接线层模拟，不复制并重跑全部冻结节点；若要求重跑 initialize/prepare（喂固定模型输出），需确认范围与副本/hash 记录方式。
+4. **memory_context 形态**：建议主验收用 envelope-only（schema 合规），完整检索对象只用于独立“历史参考”提示块，并把“完整对象→输出 schema 违规”记录为已知缺口；确认是否接受。
+5. **n8n 负分支范围**：建议正向流程必做；`budget_exceeded` 至少 CLI 直测，是否再建第二条 n8n 失败流程由用户定（背景实验有先例，但本次是“小交付”）。
+6. **验收员工权限**：是否允许验收员工执行只读校验命令（`sha256sum`、只读 Python 校验、`git status`）以复核 hash 与越界写入？建议允许并落证据；不允许则需接受较弱证据。
+7. **schema 校验方式**：因 CLI 不读取 schema 文件、`jsonschema` 是否安装未知，建议在交付目录内提供基于 stdlib 的只读子集校验脚本（dev 编写、test 执行、reviewer 复核）；确认是否允许该额外脚本。
+8. **文档同步**：本次不改变环境职责/数据流，建议不改 `docs/当前基线.md`、不新增 DR，只在交付 README 记录；请确认是否需要在基线或决策记录登记本次小交付。
+
+## 八、结论
+
+方案可行，但**先定 4 件事才能进开发**：命令执行授权与沙箱失败语义、合成 scope 取值、`memory_context` 采用 envelope-only 还是完整对象、n8n 流程范围（是否含失败分支）。本阶段我未写文件、未执行命令、未启动服务；以上验收方法与命令均为第二阶段草案，待计划确认后再由对应员工执行。

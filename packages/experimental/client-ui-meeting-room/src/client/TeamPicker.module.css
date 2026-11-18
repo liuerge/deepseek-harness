@@ -1,0 +1,7 @@
+.suffix { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.actions > button { flex: none; max-width: 100%; }
+.teams { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.teams > li { display: grid; gap: 8px; border-bottom: 1px solid var(--dsw-alias-border-l4); padding-bottom: 16px; }
+.teams strong { font-weight: 500; overflow-wrap: anywhere; }
+.teams ul { padding-inline-start: 20px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }

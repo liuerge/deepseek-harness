@@ -6,6 +6,28 @@ export type EmployeeId = Branded<'ProjectEmployeeId'>
 /** Stable identity of a reusable team template. */
 export type ProjectTeamId = Branded<'ProjectTeamId'>
 
+/** Conversation-owned planning defaults; confirmed plans retain their independent snapshots. */
+export interface SessionTeamSelection {
+  /** Compare-and-set revision of the conversation's team preference. */
+  revision: number
+  /** Captured team template, or null after an explicit clear. */
+  team: ProjectTeam | null
+  /** Employee revisions captured with this choice; never credential material. */
+  employees: Employee[]
+}
+
+/** Exact roster versions displayed when choosing a conversation's team. */
+export interface SelectSessionTeamInput {
+  /** Expected conversation preference revision; zero before any choice. */
+  expectedRevision: number
+  /** Selected template; null clears the planning defaults. */
+  teamId: ProjectTeamId | null
+  /** Exact template revision; null when clearing. */
+  teamRevision: number | null
+  /** Exact employee revisions displayed in the picker; empty when clearing. */
+  employees: { id: EmployeeId; revision: number }[]
+}
+
 /** Employee fields reviewed in the editor; zero expected revision creates a record without an id. */
 export interface EmployeeSaveInput {
   /** Existing identity for updates; omitted on creation. */
@@ -225,6 +247,8 @@ export interface ProjectTeamTaskLink {
 
 /** Immutable plan content, with confirmation derived from the saved user action. */
 export interface ProjectPlan {
+  /** Canonical real plan file and decoded-content version; absent on legacy records. */
+  document?: { path: string; sha256: string; cwd: string } | undefined
   /** Main conversation that owns planning and user corrections; absent on legacy records. */
   originSessionId?: string | undefined
   /** Stable identity shared by revisions. */

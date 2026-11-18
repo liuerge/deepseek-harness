@@ -1,0 +1,63 @@
+{
+  "source": "formal DSH Web main conversation and meeting tools",
+  "mainSessionId": "session-7f7d8429-3531-4d0d-8a1f-b946450886cb",
+  "meetingId": "meeting-53dbb4ca-d4ec-48d9-b4da-12dbb48e9ce8",
+  "rounds": [
+    {
+      "index": 0,
+      "role": "需求与方案员工",
+      "childSessionId": "87696d6b-ee94-4627-b245-9dc9506d412b",
+      "stopReason": "completed"
+    },
+    {
+      "index": 1,
+      "role": "研发员工",
+      "childSessionId": "98b69a59-f97d-4836-9055-6ed5d0817635",
+      "stopReason": "completed"
+    },
+    {
+      "index": 2,
+      "role": "测试与验收员工",
+      "childSessionId": "52325404-4143-4749-b842-f696d0f78501",
+      "stopReason": "completed"
+    }
+  ],
+  "planId": "2a086d35-b10e-4dfa-9ec4-e56946500c7b",
+  "revision": 1,
+  "confirmed": false,
+  "started": false,
+  "executionStatus": "not started; Windows sandbox provisioning blocked; WSL execution pending",
+  "browserControlStatus": "timed out before plan confirmation; no end-to-end GUI acceptance claim",
+  "files": [
+    {
+      "path": "requirement.txt",
+      "bytes": 2163,
+      "sha256": "79bb31e682e99ba931de3e79a04d2d2efdc4f64889289a9f3968805438059170"
+    },
+    {
+      "path": "opinion-0.txt",
+      "bytes": 22371,
+      "sha256": "68c81ab3bff478d70459a8c914c8f69d48b55afdb83e58358a625efaf35b50df"
+    },
+    {
+      "path": "opinion-1.txt",
+      "bytes": 13432,
+      "sha256": "b3b8ba4c8881d5dc13368b44c44b9eca7cb48b11dd48b4b16390bb5d07bd49df"
+    },
+    {
+      "path": "opinion-2.txt",
+      "bytes": 2410,
+      "sha256": "31235acd3c8117f4b4ca7c78a354cbaf8c6be37ad98675409cbea9e92cae07f1"
+    },
+    {
+      "path": "synthesis.txt",
+      "bytes": 5357,
+      "sha256": "868787c329f657c034de073c38618abe253f6ea84ba02306f5d81c8e7b4e7f35"
+    },
+    {
+      "path": "plan.json",
+      "bytes": 27397,
+      "sha256": "d9f66deb3dd3ecba75a9f1ed1a06f20e9201a51d070a87ee66f264cc3ff26ded"
+    }
+  ]
+}

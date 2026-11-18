@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   IconAgentPresetOutlineRegular, IconChevronDownOutlineRegular, IconWarningOutlineRegular, Menu, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -72,6 +72,7 @@ export type AgentPresetSeatProps =
   PropsRuntime<'conversation.hero.agentPreset'>
   & PropsLocale<'settings.agentPreset'>
   & InjectFace<AgentPresetSeatInjected>
+  & PropsRenderSlots<'conversation.hero.agentPreset.suffix' | 'conversation.hero.agentPreset.options'>
 
 /**
  * Render the new-session agent-preset chip.
@@ -79,13 +80,14 @@ export type AgentPresetSeatProps =
  * @returns The chip and any pending selection refusal, or null outside the main view.
  */
 export function AgentPresetSeat({
-  sessionId, useSessionRetainInfo, load, select, dismissRefusal, introduced, useAgentPresetSeat, useDeveloperTools, t,
+  sessionId, useSessionRetainInfo, load, select, dismissRefusal, introduced, useAgentPresetSeat, useDeveloperTools, t, renderSlot,
 }: AgentPresetSeatProps) {
   const developerTools = useDeveloperTools(value => value)
   const state = useAgentPresetSeat(snapshot => snapshot)
   const main = useSessionRetainInfo(info => sessionId === undefined
     || (info?.retainedBy.mainView ?? 0) > 0)
   const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
   // The seq keys the banner, so picking the same broken preset twice replays
   // it rather than leaving the first one silently in place.
   const toastSeq = useRef(0)
@@ -188,6 +190,7 @@ export function AgentPresetSeat({
         className={css.menuAnchor}
         anchor={(
           <button
+            ref={trigger}
             type="button"
             className={css.seat}
             aria-haspopup="menu"
@@ -201,7 +204,10 @@ export function AgentPresetSeat({
             <IconChevronDownOutlineRegular className={css.chevron} />
           </button>
         )}
-      />}
+      >{renderSlot('conversation.hero.agentPreset.options', {
+          closeMenu: () => { setOpen(false); trigger.current?.focus() },
+        })}</Menu>}
+      {ready && renderSlot('conversation.hero.agentPreset.suffix', {})}
       {toast !== null && (
         <Toast
           key={toast.seq}

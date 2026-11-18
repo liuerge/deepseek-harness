@@ -1,0 +1,54 @@
+{
+  "name": "structured_output",
+  "description": "Report your final structured result. Call this exactly once, when your answer is complete; the arguments must match this tool's parameter schema exactly.",
+  "parameters": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "criteria"
+    ],
+    "properties": {
+      "criteria": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "status",
+            "notes",
+            "evidencePaths"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": [
+                "AC-1"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail",
+                "unverifiable"
+              ]
+            },
+            "notes": {
+              "type": "string"
+            },
+            "evidencePaths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "<artifact>"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

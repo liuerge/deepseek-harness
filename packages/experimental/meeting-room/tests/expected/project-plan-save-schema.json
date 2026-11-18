@@ -1,0 +1,190 @@
+{
+  "name": "project_plan_save",
+  "description": "Save a project plan draft for user review in the project workspace. Captures the selected team and employee settings. Each edit creates an unconfirmed revision and retains earlier versions.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Existing plan id for an edit. Omit when creating."
+      },
+      "expectedRevision": {
+        "type": "integer",
+        "description": "Zero for creation, otherwise latest content revision from project_plan_list."
+      },
+      "documentPath": {
+        "type": "string",
+        "description": "Existing UTF-8 plan file inside the main conversation working directory, which must be a Git project. Write the complete plan there with file tools before saving this index."
+      },
+      "goal": {
+        "type": "string",
+        "description": "Project goal, constraints and expected delivery."
+      },
+      "teamId": {
+        "type": "string",
+        "description": "Saved team from employee_list."
+      },
+      "background": {
+        "type": "array",
+        "description": "Relevant source material and confirmed decisions. An empty array explicitly records that none is supplied.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Material title."
+            },
+            "source": {
+              "type": "string",
+              "description": "Source URL, file path or decision reference."
+            },
+            "content": {
+              "type": "string",
+              "description": "Relevant content or sourced summary delivered to each employee."
+            }
+          },
+          "required": [
+            "title",
+            "source",
+            "content"
+          ]
+        }
+      },
+      "tasks": {
+        "type": "array",
+        "description": "Work items in execution order, with assigned team members and acceptance criteria.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "type": "string",
+              "description": "Responsibility of this task."
+            },
+            "employeeId": {
+              "type": "string",
+              "description": "Saved employee in the selected team."
+            },
+            "instruction": {
+              "type": "string",
+              "description": "Work to perform and expected artifacts."
+            },
+            "acceptance": {
+              "type": "string",
+              "description": "Checks and evidence required for subsequent acceptance."
+            },
+            "review": {
+              "type": "object",
+              "description": "Optional acceptance by independent employees. Failed or unverifiable checks block downstream work.",
+              "additionalProperties": false,
+              "properties": {
+                "rework": {
+                  "type": "object",
+                  "description": "Optional preauthorized repair of failing acceptance under unchanged criteria. Omit to disable repair.",
+                  "additionalProperties": false,
+                  "properties": {
+                    "maxAttempts": {
+                      "type": "integer",
+                      "description": "Positive maximum repair executions for this task across the execution history. Failures and interruptions consume an attempt."
+                    }
+                  },
+                  "required": [
+                    "maxAttempts"
+                  ]
+                },
+                "reviewerIds": {
+                  "type": "array",
+                  "description": "Distinct saved team employees other than the author.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "release": {
+                  "type": "string",
+                  "description": "Continue after all reviewers pass, or wait for workspace user confirmation before continuing.",
+                  "enum": [
+                    "automatic",
+                    "human"
+                  ]
+                },
+                "artifactPaths": {
+                  "type": "array",
+                  "description": "Nonempty UTF-8 artifact paths within the execution directory. Host verifies decoded-content hashes before release.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "downstream": {
+                  "type": "array",
+                  "description": "Inputs required by downstream nodes. An empty array explicitly means no downstream inputs.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "description": "Nonempty individually verifiable requirements with distinct references.",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "Criterion reference within this task."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Requirement to assess."
+                      },
+                      "method": {
+                        "type": "string",
+                        "description": "Check procedure."
+                      },
+                      "expected": {
+                        "type": "string",
+                        "description": "Observable pass condition or threshold."
+                      },
+                      "evidence": {
+                        "type": "string",
+                        "description": "Required evidence references or artifact paths."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "description",
+                      "method",
+                      "expected",
+                      "evidence"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "reviewerIds",
+                "release",
+                "artifactPaths",
+                "downstream",
+                "criteria"
+              ]
+            }
+          },
+          "required": [
+            "role",
+            "employeeId",
+            "instruction",
+            "acceptance"
+          ]
+        }
+      }
+    },
+    "required": [
+      "expectedRevision",
+      "documentPath",
+      "goal",
+      "teamId",
+      "background",
+      "tasks"
+    ]
+  }
+}

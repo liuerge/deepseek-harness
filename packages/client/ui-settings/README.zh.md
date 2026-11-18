@@ -78,6 +78,8 @@ kind: "package-reference"
 
 -----
 
+已挂载的设置窗口通过 `ctx.settingsNavigation.open(sectionId)` 提供进入已注册分区的功能入口。分区不可用时拒绝请求，不改变窗口选择；窗口卸载时移除此能力。[ui-settings-general](../ui-settings-general/README.zh.md) 负责呈现。
+
 <a id="further-exploration"></a>
 ## 进一步探索
 

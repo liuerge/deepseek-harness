@@ -296,6 +296,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
+    /** Independent planning-mode labels beside the tool preset name. */
+    'conversation.hero.agentPreset.suffix': { kind: 'list'; scope: 'session-maybe' }
+    /** Additional mode actions within the preset menu; each action owns its setting. */
+    'conversation.hero.agentPreset.options': { kind: 'list'; scope: 'session-maybe'; owner: { closeMenu: () => void } }
     /** Compact options right-aligned in the New Session row after the workspace and preset controls; rendered only with a Session. */
     'conversation.hero.options': { kind: 'list'; scope: 'session' }
     /**

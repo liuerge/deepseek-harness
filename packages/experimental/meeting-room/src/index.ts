@@ -13,6 +13,7 @@ import { MeetingStore } from './store.ts'
 import { registerProjectTools } from './project-tools.ts'
 import ProjectDashboard from './dashboard.ts'
 import ProjectRoster from './roster-management.ts'
+import ProjectTeamContext from './team-context.ts'
 import { registerRosterTools } from './roster-tools.ts'
 import { registerPlanTools } from './plan-tools.ts'
 import type { MeetingId, EmployeeId, Employee } from './types.ts'
@@ -106,7 +107,7 @@ const meetingRequest = z.object({
 
 /** Owns meeting rounds, project execution tools and their checkpoint database. */
 export default class MeetingRoom extends Service {
-  static inject = ['agents', 'subagents', 'tools', 'workingDirectory', 'fs']
+  static inject = ['agents', 'subagents', 'tools', 'workingDirectory', 'fs', 'systemPrompt']
   static Config = Config
 
   /** @param ctx - Owning plugin context. @param config - Validated meeting defaults. */
@@ -124,9 +125,10 @@ export default class MeetingRoom extends Service {
     })
     drains.push(registerProjectTools(ctx, this.store, config))
     registerRosterTools(ctx, this.store)
-    registerPlanTools(ctx, this.store)
+    registerPlanTools(ctx, this.store, config.acceptanceMaxBytes)
     ctx.plugin(ProjectDashboard, { store: this.store, acceptanceMaxBytes: config.acceptanceMaxBytes })
     ctx.plugin(ProjectRoster, { store: this.store, modelCatalogTimeoutMs: config.modelCatalogTimeoutMs })
+    ctx.plugin(ProjectTeamContext, { store: this.store })
     this.ctx.tools.register(defineTool({
       name: 'meeting_start',
       description: 'Run an independent discussion from the main conversation. Participant children appear in its existing subagent catalog. Returns meeting identity and opinions, not an approved requirement. Use meeting_record_decision to retain the main assistant conclusion and follow-up actions.',

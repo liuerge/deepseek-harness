@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Run independent meeting participants from a main conversation and inspect their existing subagent Sessions. Retain participant opinions separately from versioned main-assistant conclusions; conclusions do not confirm plans or schedule tasks. Save reusable teams and sourced project plans, then execute confirmed versions with per-node acceptance and checkpoint-based continuation. When Agent Teams is enabled, admitted plan tasks are mirrored to its shared task board while project acceptance remains the release authority. The authenticated project dashboard reads actual records; progress queries currently require manual refresh.
+Run independent meeting participants from a main conversation and inspect their existing subagent Sessions. Retain participant opinions separately from versioned main-assistant conclusions; conclusions do not confirm plans or schedule tasks. Save reusable teams and sourced project plans, then execute confirmed versions with per-node acceptance and checkpoint-based continuation. When Agent Teams is enabled, admitted plan tasks are mirrored to its shared task board while project acceptance remains the release authority. The authenticated dashboard reads actual records and refreshes saved plans, confirmations and execution checkpoints.
 
 ## Table of Contents
 
@@ -56,27 +56,35 @@ A role may select a saved `employeeId` from `employee_list` to use that employee
 
 ### Versioned project plans
 
+Plans, designs and deliverables are real files in the selected Git project directory. Before `project_plan_save`, write the complete UTF-8 plan with the existing file tools and pass `documentPath`. The saved index captures its canonical path, project directory and decoded-content SHA-256. Confirmation, execution and continuation reject missing or changed documents and different project directories. Legacy plans remain readable; associate a real document through a new revision before confirmation or execution. Inline execution also requires a Git project directory. The Host does not initialize repositories, write plan documents, commit or push.
+
 Use `project_plan_save` to create or edit a draft containing a goal, team, ordered employee assignments, acceptance criteria and sourced background. Creation uses revision zero; edits specify the current id and revision. Each content revision captures team membership and employee settings and remains queryable through `project_plan_list`. Editing retains earlier generations and requires confirmation of the new revision.
 
 The workspace exposes user confirmation through its Remote action. The model tools save and read drafts. Run a confirmed latest revision with `project_execute({ planId, planRevision })`, omitting inline goal, tasks and team. The workers receive the saved source content, reference identifiers and captured employee settings in their logged prompts. Later roster edits affect later drafts. Each confirmed revision admits one execution. Repeated starts and stale or unconfirmed versions fail before child startup. An interrupted execution requires inspection and a new reviewed revision before retrying; automatic resume remains pending.
 
 Inline execution with a goal and tasks remains available for existing callers. Plan confirmation checks apply to executions that select a saved plan. New runs capture the executing caller's working directory; continuation keeps that directory. Task dependency scheduling remains pending. The workspace shows the latest plan generation; the plan tool returns retained generations. Host queries currently read all retained plan records.
 
-Tasks may include `review` with independent team reviewers, criteria, methods, pass conditions, evidence, explicit `artifactPaths`, downstream inputs and `automatic` or `human` release. UTF-8 artifacts must be bounded regular files inside the captured execution directory; `acceptanceMaxBytes` defaults to 4 MiB per file. Each reviewer must use the `read` tool on every artifact and submit each criterion once through structured output. Missing evidence becomes unverifiable. Host-observed decoded-text SHA-256 values and canonical paths bind reports to files; version checks run after review, before human release and before downstream work. Automatic gates continue after all reviewers pass. Human gates wait for workspace release, then `project_execute({ projectId, expectedCheckpoint })` continues from the next task in the original directory. The checkpoint is claimed once. Changed plans or files reject release or continuation. Legacy nodes without explicit paths retain `awaiting-acceptance`; plans without `review` retain final manual review.
+Tasks may include `review` with independent team reviewers, criteria, methods, pass conditions, evidence, explicit `artifactPaths`, downstream inputs and `automatic` or `human` release. UTF-8 artifacts must be bounded regular files inside the captured execution directory; `acceptanceMaxBytes` defaults to 4 MiB per file. Each reviewer must use the `read` tool on every artifact and submit each criterion once through structured output. The structured-result schema restricts criterion IDs and evidence paths to the confirmed criteria and observed canonical artifacts. Missing evidence becomes unverifiable; diagnostics identify missing reads or invalid references and retain the reviewer's submitted status and observations. Host-observed decoded-text SHA-256 values and canonical paths bind reports to files; version checks run after review, before human release and before downstream work. Automatic gates continue after all reviewers pass. Human gates wait for workspace release, then `project_execute({ projectId, expectedCheckpoint })` continues from the next task in the original directory. The checkpoint is claimed once. Changed plans or files reject release or continuation. Legacy nodes without explicit paths retain `awaiting-acceptance`; plans without `review` retain final manual review.
 
 Failed acceptance retains its report and blocks downstream work. A confirmed `review.rework.maxAttempts` authorizes a positive bounded number of repair executions for that task; omission disables repair. The original main conversation calls `project_execute({ projectId, expectedCheckpoint })` on the exact latest `acceptance-blocked` checkpoint. An atomic `reworking` claim links the attempt to its failed checkpoint before tools start. The assigned employee receives the failed report and unchanged requirements, uses the original directory and undergoes fresh independent review. Earlier reports remain readable, and human gates still require workspace release. Failed or interrupted attempts consume the limit; other failed or interrupted execution states cannot resume this way and require inspection. New plan revisions invalidate old repair claims. The workspace prepares repair drafts and displays the confirmed limit and consumed attempts; it does not automatically send drafts.
+
+Before dispatching each next task, execution checks for pending user input in the main conversation. It records `awaiting-direction` and returns control without interrupting the active employee round or dropping the queued message. After processing that input, the original main conversation may claim the exact checkpoint to continue the unchanged confirmed plan; changed requirements require a revised, confirmed plan. The checkpoint index identifies the next unstarted task, so continuation does not repeat completed work. Inline executions stop as `interrupted`, without offering checkpoint continuation; inspect existing work and save a confirmed plan for the remaining tasks. Input still queued at continuation rejects with `PROJECT_DIRECTION_PENDING` without advancing checkpoints.
 
 ### Reusable employees and teams
 
 The authenticated `projectRoster` service exposes registered connection catalogs and version-checked employee/team saves for the workspace editor. Saving an employee requires a registered provider route; its model id may be absent from the advisory catalog. A connection's registration does not verify credentials. Model-catalog discovery has a per-route deadline and settles on cancellation or plugin disposal; failures are explicit per route. The provider still owns any underlying catalog request that its adapter cannot cancel. Saving roster configuration neither confirms a plan nor starts model work, and confirmed plans retain their captured employee configurations.
 
-`employee_list` returns the Host's saved employees and team templates. `employee_save` saves a name, responsibilities, explicit provider/model and optional registered DSH `preset`. `team_save` saves a team of distinct existing employee ids. Creation omits the id and uses `expectedRevision: 0`; updates use the current id and revision. A stale save fails with `PROJECT_ROSTER_STALE`. The file database preserves these records across restart and upgrades the existing project database to schema version 5 while retaining history.
+`employee_list` returns the Host's saved employees and team templates. `employee_save` saves a name, responsibilities, explicit provider/model and optional registered DSH `preset`. `team_save` saves a team of distinct existing employee ids. Creation omits the id and uses `expectedRevision: 0`; updates use the current id and revision. A stale save fails with `PROJECT_ROSTER_STALE`. The file database preserves these records across restart and upgrades the existing project database to schema version 6 while retaining history.
 
 Pass `employeeId` on a project task to use that employee's model, instructions and optional preset. An omitted preset uses the caller composition. Pass `teamId` to require every task's employee to belong to that saved team. Admission resolves all task references before execution and checkpoints the employee and team revisions. Later roster edits affect later runs. Existing tasks without employee ids keep their previous behavior.
 
 The roster tools and the dashboard catalog operate across this Host. Model routes and presets must be available in the running composition; the subagent runtime reports unavailable configurations when it starts work. Employee configuration is not a tool permission policy. Presets and the existing tool approval system own effective capabilities. Deletion, employee activity projections and per-skill editing remain pending.
 
 ### Project execution
+
+The authenticated `projectTeamContext` service captures a main conversation's planning defaults through `select`, using the displayed selection, team and employee revisions; `current` reads the saved snapshot. Selection is stored in the project database and does not dispatch work, enable the shared board, grant tool permissions or confirm plans. Later roster edits leave the captured snapshot unchanged. An explicit null team clears the default with a new revision. Descendants cannot change their parent's selection.
+
+The required `systemPrompt` service materializes these defaults into the main assistant's logged runtime context. Employees receive their own task assignments rather than this root-only context. A clear produces an explicit no-default context, superseding earlier choices. Only context actually sent to a model enters the Session log; the business database owns the current planning preference. The client entry is documented in the [workspace UI](../client-ui-meeting-room/README.md).
 
 `project_execute` takes a goal and ordered tasks containing `role`, `instruction` and `acceptance`. Workers use the caller's working directory and tool composition through the configured subagent provider. Every task receives the previous worker's handoff and the shared goal. Execution returns `awaiting-review`; the caller checks artifacts before accepting delivery. A non-completed child result stops subsequent tasks with a typed error.
 
@@ -158,6 +166,20 @@ The two project schemas, three roster schemas and two plan schemas add fixed con
 #### KV Cache effect
 
 Tool results append to caller history. Each worker starts a fresh child Session. Repair workers also receive the failed report and attempt reference in their logged input.
+
+### Selected team context
+
+#### What the model sees
+
+The main assistant receives the captured team and employees as a required runtime-context section, with instructions to collect selected employees’ opinions through `meeting_start`, retain the main assistant’s synthesis through `meeting_record_decision`, and prepare a confirmable plan. User corrections require inspecting actual execution records and revising the plan when necessary. Requested n8n validation belongs in a testing employee assignment using available command tools, with actual execution evidence; unavailable tools or permissions remain explicit blockers. An explicit clear says no default team is selected. Child employees receive no copy of this section. The Session records the actual rendered context through the existing context-snapshot mechanism.
+
+#### Token effect
+
+Selection and clearing add no model requests. The rendered snapshot carries the selected employee configurations; its token size follows their text. An unchanged selection uses the existing runtime-context reuse policy.
+
+#### KV Cache effect
+
+The stable tool declarations and system sections do not change. A changed preference updates the logged runtime-context suffix; previously confirmed plan content remains independent.
 
 ## Known Limitations and Deferred Work
 

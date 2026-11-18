@@ -12,7 +12,11 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 
 afterEach(() => { vi.unstubAllEnvs() })
 
-it.each(['desktop', 'web'])('limits collection and its shutdown to the Desktop launch: %s', async (profile) => {
+it.each([
+  { profile: 'desktop', optedIn: false },
+  { profile: 'web', optedIn: false },
+  { profile: 'desktop', optedIn: true },
+])('requires opt-in for product collection: $profile, optedIn=$optedIn', async ({ profile, optedIn }) => {
   const received = Promise.withResolvers<undefined>()
   const server = createServer((req) => { req.resume(); req.once('end', () => { received.resolve(undefined) }) })
   server.listen(0, '127.0.0.1')
@@ -37,14 +41,18 @@ it.each(['desktop', 'web'])('limits collection and its shutdown to the Desktop l
   ctx.loader.builtins.analytics = Analytics
   const rows = loadOverlayPatches('analytics', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
     .flatMap(patch => patch.insert ?? []).filter(row => row.id === 'desktop-product-telemetry' || row.id === 'product-analytics')
-  const entries = rows.map(row => ({ ...row, name: row.id === 'desktop-product-telemetry' ? 'cordis:telemetry' : 'cordis:analytics' }))
+  expect(rows.every(row => row.disabled === true)).toBe(true)
+  const entries = rows.map(row => ({ ...row, ...(optedIn ? { disabled: false } : {}),
+    ...(optedIn && row.id === 'product-analytics' ? { config: { ...row.config as Record<string, unknown>, enabled: true } } : {}),
+    name: row.id === 'desktop-product-telemetry' ? 'cordis:telemetry' : 'cordis:analytics' }))
   await ctx.loader.root.update(entries)
   await ctx.loader.await()
   const entry = ctx.loader.resolve('desktop-product-telemetry')
-  expect(entry.disabled).toBe(profile !== 'desktop')
-  if (profile !== 'desktop') {
+  expect(entry.disabled).toBe(!optedIn)
+  if (!optedIn) {
     expect(ctx.get('productTelemetry')).toBeUndefined()
     expect(ctx.get('productAnalytics')).toBeUndefined()
+    expect(identity).not.toHaveBeenCalled()
     return
   }
   expect(rows[0]!.config).toMatchObject({

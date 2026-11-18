@@ -9,6 +9,7 @@ import type {
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { verifyAcceptanceArtifacts } from './acceptance.ts'
+import { verifyPlanDocument } from './plan-document.ts'
 import { executionCheckpointSchema } from './checkpoints.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -24,6 +25,37 @@ export default class ProjectDashboard extends TypertRemoteService {
   /** @param ctx - Owning plugin scope. @param options - Shared store and bounded artifact-read policy. */
   constructor(ctx: Context, private readonly options: { store: MeetingStore; acceptanceMaxBytes: number }) {
     super(ctx, 'projectDashboard')
+  }
+
+  /**
+   * Follow committed plan and checkpoint invalidations.
+   * @param signal - Cancellation that releases the store subscription.
+   * @returns A ready frame followed by coalesced invalidations requiring fresh plan and timeline reads.
+   */
+  @Remote({ mode: 'stream' })
+  async *follow(signal: AbortSignal): AsyncIterable<boolean> {
+    const pending = { changed: false }
+    let wake: (() => void) | undefined
+    const stop = this.store.onProjectChange(() => { pending.changed = true; wake?.() })
+    const abort = (): void => { wake?.() }
+    signal.addEventListener('abort', abort, { once: true })
+    try {
+      signal.throwIfAborted()
+      yield true
+      for (;;) {
+        if (!pending.changed) await new Promise<void>((resolve) => {
+          wake = resolve
+          if (signal.aborted) resolve()
+        })
+        wake = undefined
+        if (signal.aborted) break
+        pending.changed = false
+        yield true
+      }
+    } finally {
+      stop()
+      signal.removeEventListener('abort', abort)
+    }
   }
 
   private get store(): MeetingStore { return this.options.store }
@@ -70,9 +102,12 @@ export default class ProjectDashboard extends TypertRemoteService {
    * @returns Confirmed plan; stale views fail without confirming newer content.
    */
   @Remote
-  confirmPlan(id: string, revision: number, signal: AbortSignal): Promise<ProjectPlan> {
+  async confirmPlan(id: string, revision: number, signal: AbortSignal): Promise<ProjectPlan> {
     signal.throwIfAborted()
-    return Promise.resolve(this.store.confirmPlan(brandString<ProjectPlanId>(id), revision))
+    const plan = this.store.currentPlan(brandString<ProjectPlanId>(id), revision)
+    await verifyPlanDocument(this.ctx, plan, this.options.acceptanceMaxBytes, signal)
+    signal.throwIfAborted()
+    return this.store.confirmPlan(brandString<ProjectPlanId>(id), revision)
   }
 
   /**
@@ -94,6 +129,7 @@ export default class ProjectDashboard extends TypertRemoteService {
       throw new HarnessError('Refresh the execution and review a passing node awaiting human confirmation.', 'PROJECT_EXECUTION_NOT_APPROVABLE')
     }
     const plan = this.store.currentPlan(initial.planId, initial.planRevision, true)
+    await verifyPlanDocument(this.ctx, plan, this.options.acceptanceMaxBytes, signal, initial.cwd)
     if (plan.tasks[latest.index]?.review?.release !== 'human') throw new HarnessError('This node does not request human release.', 'PROJECT_EXECUTION_NOT_APPROVABLE')
     const reports = history.flatMap(entry =>
       (entry.state === 'acceptance-passed' || entry.state === 'released') && entry.report?.passed ? [entry.report] : [])

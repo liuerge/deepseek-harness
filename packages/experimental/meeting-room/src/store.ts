@@ -1,17 +1,19 @@
 /** SQLite project and meeting business records associated with durable Sessions. */
 import { DatabaseSync } from 'node:sqlite'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { employeeSchema, teamSchema } from './roster.ts'
+import { employeeSchema, teamSchema, sessionTeamSelectionSchema } from './roster.ts'
 import type {
   Employee, EmployeeId, ProjectTeam, ProjectTeamId, ProjectPlan, ProjectPlanId, ProjectExecutionId, MeetingRecord,
   ProjectTeamTaskId, ProjectTeamTaskLink,
+  SessionTeamSelection,
 } from './types.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { projectPlanSchema } from './plans.ts'
 import { executionCheckpointSchema, type ExecutionCheckpoint } from './checkpoints.ts'
 
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = 6
 
 /** One stored round pointing back at the child Session that produced it. */
 export interface StoredRound {
@@ -31,6 +33,21 @@ export interface StoredRound {
  */
 export class MeetingStore {
   private readonly db: DatabaseSync
+  private readonly projectListeners = new Set<() => void>()
+
+  /**
+   * Subscribe to successfully persisted project plans and execution checkpoints.
+   * @param listener - Synchronous invalidation callback; it must not throw.
+   * @returns Idempotent unsubscribe callback.
+   */
+  onProjectChange(listener: () => void): () => void {
+    this.projectListeners.add(listener)
+    return () => { this.projectListeners.delete(listener) }
+  }
+
+  private projectChanged(): void {
+    for (const listener of this.projectListeners) listener()
+  }
 
   /** @param path - SQLite file path, or `:memory:` for a throwaway store. */
   constructor(path: string) {
@@ -114,8 +131,70 @@ export class MeetingStore {
         status TEXT NOT NULL,
         PRIMARY KEY (project_id, task_index)
       );
+      CREATE TABLE IF NOT EXISTS project_session_teams (
+        session_id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL,
+        record TEXT NOT NULL
+      );
     `)
     this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+  }
+
+  /**
+   * Read the last chosen team snapshot for one main conversation.
+   * @param sessionId - Exact conversation identity.
+   * @returns Saved planning defaults, or null before the first choice.
+   */
+  sessionTeam(sessionId: SessionId): SessionTeamSelection | null {
+    const row = this.db.prepare('SELECT record FROM project_session_teams WHERE session_id = ?').get(sessionId)
+    return row === undefined ? null : sessionTeamSelectionSchema.parse(JSON.parse(String(row['record'])))
+  }
+
+  /**
+   * Save captured planning defaults without altering plans or starting agents.
+   * @param sessionId - Main conversation receiving the choice.
+   * @param selection - Complete next snapshot, including an explicit clear.
+   * @param expectedRevision - Zero on creation, otherwise the last displayed revision.
+   * @returns Saved snapshot; competing writes fail without replacing the newer choice.
+   */
+  saveSessionTeam(sessionId: SessionId, selection: SessionTeamSelection, expectedRevision: number): SessionTeamSelection {
+    const validated = sessionTeamSelectionSchema.parse(selection)
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || validated.revision !== expectedRevision + 1) {
+      throw new HarnessError('The team selection revision must advance by one.', 'PROJECT_TEAM_SELECTION_REVISION')
+    }
+    try {
+      this.db.exec('BEGIN IMMEDIATE')
+      try {
+        if (validated.team !== null) {
+          const revisionOf = this.db.prepare('SELECT revision FROM project_roster WHERE kind = ? AND id = ?')
+          if (Number(revisionOf.get('team', validated.team.id)?.['revision']) !== validated.team.revision
+            || validated.employees.some(employee => Number(revisionOf.get('employee', employee.id)?.['revision']) !== employee.revision)) {
+            throw new HarnessError('The roster changed before the choice could be saved. Refresh it before choosing again.',
+              'PROJECT_TEAM_SELECTION_ROSTER_STALE')
+          }
+        }
+        const result = expectedRevision === 0
+          ? this.db.prepare('INSERT OR IGNORE INTO project_session_teams (session_id, revision, record) VALUES (?, ?, ?)')
+            .run(sessionId, validated.revision, JSON.stringify(validated))
+          : this.db.prepare('UPDATE project_session_teams SET revision = ?, record = ? WHERE session_id = ? AND revision = ?')
+            .run(validated.revision, JSON.stringify(validated), sessionId, expectedRevision)
+        if (result.changes !== 1) {
+          throw new HarnessError('The conversation team changed. Refresh its selection before choosing again.', 'PROJECT_TEAM_SELECTION_STALE')
+        }
+        this.db.exec('COMMIT')
+        return validated
+      } catch (cause) {
+        try { this.db.exec('ROLLBACK') }
+        catch (rollbackError) {
+          throw new HarnessError('The team preference storage outcome is unknown. Inspect it before retrying.',
+            'PROJECT_TEAM_SELECTION_PERSISTENCE', { cause: new AggregateError([cause, rollbackError]) })
+        }
+        throw cause
+      }
+    } catch (cause) {
+      if (cause instanceof HarnessError) throw cause
+      throw new HarnessError('The conversation team could not be saved.', 'PROJECT_TEAM_SELECTION_PERSISTENCE', { cause })
+    }
   }
 
   /**
@@ -156,6 +235,7 @@ export class MeetingStore {
       SELECT ?, ?, ? WHERE COALESCE((SELECT MAX(revision) FROM project_plan_versions WHERE id = ?), 0) = ?`)
       .run(validated.id, validated.revision, JSON.stringify(validated), validated.id, expectedRevision))
     if (result.changes !== 1) throw new HarnessError('Plan changed. Read the current version before saving.', 'PROJECT_PLAN_STALE')
+    this.projectChanged()
     return validated
   }
 
@@ -167,10 +247,12 @@ export class MeetingStore {
    */
   confirmPlan(id: ProjectPlanId, revision: number): ProjectPlan {
     const plan = this.currentPlan(id, revision)
-    this.withPlanStorage(() => this.db.prepare(`INSERT OR IGNORE INTO project_plan_confirmations (id, revision, confirmed_at)
+    const result = this.withPlanStorage(() => this.db.prepare(`INSERT OR IGNORE INTO project_plan_confirmations (id, revision, confirmed_at)
       SELECT ?, ?, ? WHERE (SELECT MAX(revision) FROM project_plan_versions WHERE id = ?) = ?`)
       .run(id, revision, Date.now(), id, revision))
-    return this.currentPlan(plan.id, plan.revision, true)
+    const confirmed = this.currentPlan(plan.id, plan.revision, true)
+    if (result.changes === 1) this.projectChanged()
+    return confirmed
   }
 
   /**
@@ -290,6 +372,7 @@ export class MeetingStore {
     } catch (cause) {
       throw new HarnessError('Project checkpoint persistence failed. Inspect the child session before retrying work.', 'PROJECT_PERSISTENCE_FAILED', { cause })
     }
+    this.projectChanged()
   }
 
   /**
@@ -322,6 +405,7 @@ export class MeetingStore {
       .run(sessionId, JSON.stringify({ ...entry, projectId }), projectId, checkpoint,
         plan.id, plan.revision, plan.id, plan.revision))
     if (result.changes !== 1) throw new HarnessError('Execution changed. Refresh its checkpoints before approval or continuation.', 'PROJECT_EXECUTION_STALE')
+    this.projectChanged()
   }
 
   /**

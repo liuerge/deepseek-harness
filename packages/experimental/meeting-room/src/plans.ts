@@ -40,6 +40,7 @@ export const planBackgroundSchema = z.object({
 
 /** Saved plan generation, including employee and team configuration snapshots. */
 export const projectPlanSchema = z.object({
+  document: z.object({ path: z.string().min(1), sha256: z.string().regex(/^[a-f0-9]{64}$/), cwd: z.string().min(1) }).optional(),
   originSessionId: z.string().min(1).optional(),
   id: z.string().min(1).transform(id => brandString<ProjectPlanId>(id)),
   revision: z.number().int().positive(),

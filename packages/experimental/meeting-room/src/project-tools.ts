@@ -10,6 +10,7 @@ import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import type { Config } from './index.ts'
 import type { MeetingStore } from './store.ts'
 import type { EmployeeId, ProjectPlanId, ProjectExecutionId, AcceptanceReport, ProjectTeamLinkState } from './types.ts'
+import { verifyPlanDocument, requireGitProject } from './plan-document.ts'
 import { reviewTask, verifyAcceptanceArtifacts } from './acceptance.ts'
 import {
   claimProjectTeamTask, completeProjectTeamTask, linkProjectTeamTasks, registerTeamClaimGates, syncReleasedProjectTeamTasks,
@@ -39,10 +40,10 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
   ctx.effect(() => drain)
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'project_execute',
-    description: 'Execute a confirmed saved plan, ordered inline tasks, or continue an exact execution checkpoint. Released nodes continue downstream. Acceptance-blocked nodes may repair the same task only within the confirmed rework limit, then undergo fresh independent review. Other failures or interruptions require inspection and a revised plan.',
+    description: 'Execute a confirmed saved plan, ordered inline tasks, or continue an exact execution checkpoint. New user input in the main conversation stops dispatch before the next task and returns awaiting-direction; process that input before continuing an unchanged confirmed plan. Released nodes continue downstream. Acceptance-blocked nodes may repair the same task only within the confirmed rework limit, then undergo fresh independent review. Other failures or interruptions require inspection and a revised plan.',
     parameters: {
-      projectId: { type: 'string', description: 'Execution from project_records to continue after release or repair after failed acceptance. Supply expectedCheckpoint and omit all plan and inline fields.' },
-      expectedCheckpoint: { type: 'integer', description: 'Exact latest released or acceptance-blocked checkpoint sequence from project_records. Continuation claims this checkpoint once.' },
+      projectId: { type: 'string', description: 'Execution from project_records to continue after release or processing pending user direction, or repair after failed acceptance. Supply expectedCheckpoint and omit all plan and inline fields.' },
+      expectedCheckpoint: { type: 'integer', description: 'Exact latest released, awaiting-direction or acceptance-blocked checkpoint sequence from project_records. Continuation claims this checkpoint once.' },
       planId: { type: 'string', description: 'Confirmed saved plan from project_plan_list. Supply planRevision and omit inline goal, tasks and teamId.' },
       planRevision: { type: 'integer', description: 'Exact latest confirmed content revision to execute once.' },
       goal: { type: 'string', description: 'Project objective for an inline run. Required with tasks when planId is omitted.' },
@@ -84,10 +85,12 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
       const latest = history.at(-1)
       const initial = history.find(entry => entry.state === 'started')
       const repairing = latest?.state === 'acceptance-blocked'
-      if (args.projectId !== undefined && (!latest || (!repairing && latest.state !== 'released') || latest.checkpoint !== args.expectedCheckpoint
-        || latest.index === undefined || !latest.report || latest.report.passed === repairing
+      const awaitingDirection = latest?.state === 'awaiting-direction'
+      if (args.projectId !== undefined && (!latest || (!repairing && !awaitingDirection && latest.state !== 'released')
+        || latest.checkpoint !== args.expectedCheckpoint
+        || latest.index === undefined || (!awaitingDirection && (!latest.report || latest.report.passed === repairing))
         || !initial?.planId || !initial.planRevision || !initial.cwd)) {
-        throw new HarnessError('Continue only an exact released or acceptance-blocked checkpoint. Inspect other failures before retrying.',
+        throw new HarnessError('Continue only an exact released, awaiting-direction or acceptance-blocked checkpoint. Inspect other failures before retrying.',
           'PROJECT_EXECUTION_NOT_RELEASED')
       }
       const plan = initial?.planId && initial.planRevision ? store.currentPlan(initial.planId, initial.planRevision, true)
@@ -95,6 +98,12 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
           : store.currentPlan(brandString<ProjectPlanId>(args.planId), args.planRevision ?? 0, true)
       if (args.projectId !== undefined && (root !== parent || initial?.sessionId !== parent.session.id)) {
         throw new ToolContextUnavailableError('Continue or repair the execution from its original main conversation.')
+      }
+      const hasUserInput = (): boolean => [...parent.inbox.nextTurn, ...parent.inbox.nextStep]
+        .some(message => message.source.kind === 'user')
+      if (awaitingDirection && hasUserInput()) {
+        throw new HarnessError('Process the queued user input in the main conversation before continuing. End this response to let that input be claimed.',
+          'PROJECT_DIRECTION_PENDING')
       }
       const scheduled: ProjectTeamLinkState | undefined = initial?.teamLink
       const repairTask = repairing && latest.index !== undefined ? plan?.tasks[latest.index] : undefined
@@ -148,6 +157,8 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
           await syncReleasedProjectTeamTasks(ctx, store, root, projectId, history, signal)
         }
         const cwd = initial?.cwd ?? await ctx.workingDirectory.ensure(parent, signal)
+        await requireGitProject(ctx, cwd, signal)
+        if (plan) await verifyPlanDocument(ctx, plan, config.acceptanceMaxBytes, signal, cwd)
         assertOpen()
         signal.throwIfAborted()
         if (latest === undefined && plan) {
@@ -184,10 +195,22 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
             ...(plan === undefined ? {} : { planId: plan.id, planRevision: plan.revision, background: plan.background }) })
           for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
           for (const [index, task] of tasks.entries()) {
-            if (latest?.index !== undefined && (index < latest.index || (!repairing && index === latest.index))) continue
+            if (latest?.index !== undefined
+              && (index < latest.index || (!repairing && !awaitingDirection && index === latest.index))) continue
             signal.throwIfAborted()
-            if (plan) store.currentPlan(plan.id, plan.revision, true)
             for (const report of accepted) await verifyAcceptanceArtifacts(ctx, report, cwd, config.acceptanceMaxBytes, signal)
+            if (plan) {
+              store.currentPlan(plan.id, plan.revision, true)
+              await verifyPlanDocument(ctx, plan, config.acceptanceMaxBytes, signal, cwd)
+            }
+            if (hasUserInput()) {
+              const state = plan ? 'awaiting-direction' : 'interrupted'
+              record({ state, index, handoff })
+              return JSON.stringify({ projectId, state, index, handoff, ...linkage,
+                message: plan
+                  ? 'New user input is waiting in the main conversation. No next task was dispatched. End this response so the main assistant can process that input. Inspect project_records afterward; continue this exact checkpoint only if the confirmed plan is unchanged, otherwise save and confirm a revised plan.'
+                  : 'New user input is waiting in the main conversation. Inline execution stopped before the next task. End this response to process that input, inspect existing work, then save and confirm a plan for the remaining work. Do not repeat completed tasks.' })
+            }
             const prompt = [
               `Project goal and background\n${goal}`,
               ...(plan === undefined ? [] : [

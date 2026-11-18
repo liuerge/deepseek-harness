@@ -39,6 +39,8 @@ kind: "package-reference"
 
 在桌面端，模式选择器中的直接选择切换到另一个内置 preset 时，可选的[产品埋点](../product-analytics/README.zh.md)服务会收到 `agent_preset_switch`：未绑定 Session 的选择在暂存给下一个 Session 时计入，已绑定空白 Session 的选择在 Host 应用后计入。事件携带按 preset id 映射的来源与目标类别（`cordis` 记为 `creator`；`ptc`、`minimal`、`standard` 保持原 id；其他 id 记为 `other`），以及选择时已知的代码工作工具设置。选择自定义目标、被拒绝的选择、Host 最终落在其他 preset 的选择、默认值修改及其空白 Session 同步均不报告；来源模式或代码工作工具设置未知时做出的选择同样不报告。不采集自定义 preset 的 id 和名称。
 
+新会话选择器提供两个可选扩展位置：`conversation.hero.agentPreset.options` 添加独立菜单操作，`conversation.hero.agentPreset.suffix` 在预设旁展示其标签。贡献者负责自己的设置和弹窗；切换工具预设不会清除其他插件的规划偏好。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
