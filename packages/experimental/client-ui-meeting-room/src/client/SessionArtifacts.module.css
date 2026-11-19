@@ -4,7 +4,7 @@
 .group { margin-bottom: 24px; }
 .group h3 { margin: 0 0 12px; font-size: 14px; font-weight: 500; }
 .list { list-style: none; padding: 0; margin: 0; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-main); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 12px 0; border-bottom: 0.5px solid var(--dsw-alias-border-main); }
 .row:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }
 .file { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 240px; }
 .name { font-weight: 500; overflow-wrap: anywhere; }

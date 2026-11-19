@@ -1,21 +1,21 @@
-.section { border: 1px solid var(--dsw-alias-border-l4); border-radius: 12px; padding: 24px; min-width: 0; }
+.section { border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 12px; padding: 24px; min-width: 0; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .section h2 { margin: 0; font-size: 16px; font-weight: 500; }
 .section h3 { margin: 16px 0 8px; font-size: 14px; font-weight: 500; }
 .hint, .list p, .member small { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.form { display: grid; gap: 16px; margin: 24px 0; padding-block: 16px; border-block: 1px solid var(--dsw-alias-border-l4); }
+.form { display: grid; gap: 16px; margin: 24px 0; padding-block: 16px; border-block: 0.5px solid var(--dsw-alias-border-l4); }
 .form h3, .form p { margin: 0; }
 .form label { display: grid; gap: 8px; min-width: 0; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px; }
-.form select, .form textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--dsw-alias-border-l4); border-radius: 8px; padding: 8px 12px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; }
+.form select, .form textarea { box-sizing: border-box; width: 100%; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 8px; padding: 8px 12px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; }
 .form textarea { min-height: 88px; resize: vertical; }
-.form fieldset { border: 1px solid var(--dsw-alias-border-l4); border-radius: 8px; margin: 0; padding: 16px; min-width: 0; }
+.form fieldset { border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 8px; margin: 0; padding: 16px; min-width: 0; }
 .form .member { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
 .member span { min-width: 0; overflow-wrap: anywhere; }
 .member small { display: block; font-size: inherit; }
 .list { list-style: none; margin: 0; padding: 0; }
-.list li { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding-block: 16px; border-bottom: 1px solid var(--dsw-alias-border-l4); }
+.list li { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding-block: 16px; border-bottom: 0.5px solid var(--dsw-alias-border-l4); }
 .list li > div:first-child { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
 .list strong { font-weight: 500; }
 .list p { margin: 4px 0 0; }
