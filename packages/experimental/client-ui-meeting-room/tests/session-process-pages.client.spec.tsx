@@ -2,7 +2,7 @@
 
 /** Process views render actual injected records and keep user actions on the main conversation. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { Employee, ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
 import { SessionMeetings, type MeetingCatalog } from '../src/client/SessionMeetings.tsx'
@@ -37,7 +37,9 @@ it.each([0, 1])('keeps both review generations and routes only authorized repair
   render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
     configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject, openMain: noop, openWorker, adoptPlan: noop } as Parameters<typeof ProjectPage>[0]} />)
+  fireEvent.click(screen.getByRole('button', { name: zh['board.task-detail'] }))
   expect(screen.getByText('Initial failure')).toBeTruthy()
   expect(screen.getByText('Repair needs another check')).toBeTruthy()
   const button = screen.getByRole('button', { name: zh['review.rework'] })
@@ -63,12 +65,14 @@ it.each(['running', 'awaiting-direction'])('shows the Team task association and 
     useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
     configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan: noop,
   } as Parameters<typeof ProjectPage>[0]} />)
   expect(screen.getByText(zh['project.team-disabled'])).toBeTruthy()
   expect(screen.getByText('Team 共享任务 task-3 · 执行中')).toBeTruthy()
   if (state === 'awaiting-direction') {
-    expect(screen.getByText(zh['project.awaiting-direction'])).toBeTruthy()
+    // The board shows the phase in the project summary and on each task card.
+    expect(screen.getAllByText(zh['project.awaiting-direction']).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: zh['review.continue'] })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: zh['project.correct-main'] }))
     expect(noop).toHaveBeenCalledWith('main', 'project')
@@ -110,6 +114,7 @@ it('offers an explicit handoff for legacy plans rather than enabling actions wit
   render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
     configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan } as Parameters<typeof ProjectPage>[0]} />)
   expect(screen.getByRole('button', { name: zh['plan.edit'] }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: zh['plan.run'] }).hasAttribute('disabled')).toBe(true)
@@ -130,4 +135,32 @@ it('filters existing-catalog project tasks by the exact main conversation and la
   expect(screen.getByText('Main project')).toBeTruthy()
   expect(screen.queryByText('Unrelated project')).toBeNull()
   expect(screen.getByText('已产出 1 / 1 项，产出仍需按约定验收')).toBeTruthy()
+})
+
+it('opens the board in a viewport dialog and returns to the inline board', () => {
+  const records: ProjectCheckpoint[] = [
+    { sessionId: 'main', projectId: 'project', checkpoint: 1, state: 'started', goal: 'Board project',
+      tasks: [{ role: 'Writer', instruction: 'Write', acceptance: 'Check' }] },
+    { sessionId: 'main', projectId: 'project', checkpoint: 2, state: 'running', index: 0 },
+  ]
+  const catalog = { records, connections: [], connectionsLoading: false, connectionsFailed: false,
+    employees: [], teams: [], plans: [], loading: false, failed: false }
+  const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
+  const noop = vi.fn()
+  render(<ProjectPage {...{
+    useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
+    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+    preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
+    useContextMenu: () => ({ getTriggerProps: () => ({}) }),
+    approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan: noop,
+  } as Parameters<typeof ProjectPage>[0]} />)
+  expect(screen.queryByRole('dialog')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: zh['board.fullscreen'] }))
+  const dialog = screen.getByRole('dialog', { name: zh['board.title'] })
+  expect(within(dialog).getByText(zh['board.column.pending'])).toBeTruthy()
+  expect(within(dialog).getByText(zh['board.column.blocked'])).toBeTruthy()
+  expect(within(dialog).getByRole('button', { name: zh['board.task-detail'] })).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: zh['board.exit-fullscreen'] }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.getByRole('button', { name: zh['board.fullscreen'] })).toBeTruthy()
 })

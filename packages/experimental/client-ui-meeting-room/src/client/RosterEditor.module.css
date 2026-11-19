@@ -1,8 +1,9 @@
-.section { border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 12px; padding: 24px; min-width: 0; }
+.section { border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-card-fill); padding: 20px 24px; min-width: 0; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.section h2 { margin: 0; font-size: 16px; font-weight: 500; }
+.section h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .section h3 { margin: 16px 0 8px; font-size: 14px; font-weight: 500; }
-.hint, .list p, .member small { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.hint, .list p, .member small { color: var(--dsw-alias-label-secondary); }
+.hint, .list p { overflow-wrap: anywhere; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .form { display: grid; gap: 16px; margin: 24px 0; padding-block: 16px; border-block: 0.5px solid var(--dsw-alias-border-l4); }
 .form h3, .form p { margin: 0; }
@@ -12,8 +13,8 @@
 .form textarea { min-height: 88px; resize: vertical; }
 .form fieldset { border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 8px; margin: 0; padding: 16px; min-width: 0; }
 .form .member { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
-.member span { min-width: 0; overflow-wrap: anywhere; }
-.member small { display: block; font-size: inherit; }
+.member span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member small { display: block; font-size: inherit; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list { list-style: none; margin: 0; padding: 0; }
 .list li { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding-block: 16px; border-bottom: 0.5px solid var(--dsw-alias-border-l4); }
 .list li > div:first-child { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }

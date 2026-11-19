@@ -76,6 +76,20 @@ it('cancels the board request on disposal and refuses a second choice while it i
   } finally { result.resolve({ ok: true, value: undefined }); await controller.dispose(); await runtime.dispose() }
 })
 
+it('hides the composer team chip until a team is chosen', async () => {
+  const runtime = await SlotTestRuntime.create()
+  const controller = new TeamPickerController(runtime.ctx, 'main' as SessionId)
+  try {
+    render(<TeamPickerLabel {...{
+      sessionId: 'main' as SessionId, useTeamPicker: bindSnapshotSelector(controller.store),
+      useSessions: (selector: (value: { byId: object }) => unknown) => selector({ byId: {} }),
+      useProjection: () => ({ enabled: false }), load: vi.fn(async () => {}), open: vi.fn(), close: vi.fn(),
+      choose: vi.fn(async () => {}), configure: vi.fn(), t: makeTranslate(zh),
+    } as ComponentProps<typeof TeamPickerLabel>} />)
+    expect(screen.queryByRole('button', { name: /团队模式 ·|选择团队/ })).toBeNull()
+  } finally { cleanup(); await controller.dispose(); await runtime.dispose() }
+})
+
 it('shows individual routes and a saved-choice activation failure, and requires a workspace before choosing', async () => {
   const runtime = await SlotTestRuntime.create()
   const controller = new TeamPickerController(runtime.ctx, 'main' as SessionId)
@@ -99,9 +113,13 @@ it('shows individual routes and a saved-choice activation failure, and requires 
       useProjection: () => ({ enabled: false }), load: vi.fn(async () => {}), open, close: vi.fn(), choose,
       configure: vi.fn(), t: makeTranslate(zh),
     } as ComponentProps<typeof TeamPickerLabel>} />)
-    expect(screen.getByText('Writer · vendor-b / model-b')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /团队模式 · Delivery/ })).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toBe(zh['team-mode.board-failed'])
-    fireEvent.click(screen.getByRole('button', { name: '使用 Delivery' }))
-    expect(choose).toHaveBeenLastCalledWith(team)
+    const radios = screen.getAllByRole('radio')
+    expect(radios).toHaveLength(2)
+    expect(radios[0]?.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('radio', { name: new RegExp(zh['team-mode.no-team']) }))
+    fireEvent.click(screen.getByRole('button', { name: zh['team-mode.clear'] }))
+    expect(choose).toHaveBeenLastCalledWith(null)
   } finally { cleanup(); await controller.dispose(); await runtime.dispose() }
 })

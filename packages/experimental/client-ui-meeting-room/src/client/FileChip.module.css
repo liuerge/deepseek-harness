@@ -1,0 +1,4 @@
+.chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 8px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 6px; vertical-align: middle; color: var(--dsw-alias-label-primary); }
+.chip:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }
+.name { overflow-wrap: anywhere; }
+.hash { color: var(--dsw-alias-label-secondary); font-size: 12px; }

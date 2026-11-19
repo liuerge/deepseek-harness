@@ -1,7 +1,17 @@
-.suffix { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.actions > button { flex: none; max-width: 100%; }
-.teams { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
-.teams > li { display: grid; gap: 8px; border-bottom: 0.5px solid var(--dsw-alias-border-l4); padding-bottom: 16px; }
-.teams strong { font-weight: 500; overflow-wrap: anywhere; }
-.teams ul { padding-inline-start: 20px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.trigger { max-width: 300px; }
+/* Two-line row mirroring the tool-preset rows: the name above a one-line description. */
+.option { display: flex; flex-direction: column; gap: 2px; max-width: 280px; }
+.optionName { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); }
+.optionDesc { font-size: 12px; line-height: 16px; color: var(--dsw-alias-label-caption); white-space: normal; }
+.actions { display: flex; flex: 1; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.actions > button { min-width: 0; white-space: nowrap; }
+.configure { margin-bottom: 12px; }
+.teams { display: grid; gap: 8px; min-width: 0; }
+.teamRow { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-width: 0; padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+.teamRow[aria-checked="true"] { border-color: var(--dsw-alias-link); }
+.teamRow:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }
+@media (hover: hover) { .teamRow:hover { border-color: var(--dsw-alias-label-caption); } }
+.check { display: flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 20px; color: var(--dsw-alias-link); }
+.teamBody { display: grid; gap: 2px; min-width: 0; }
+.teamBody strong { font-weight: 500; overflow-wrap: anywhere; }
+.members { font-size: 12px; line-height: 16px; color: var(--dsw-alias-label-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

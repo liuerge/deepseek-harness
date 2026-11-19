@@ -1,0 +1,2 @@
+.chip { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; color: var(--dsw-alias-label-primary); }
+.dot { flex: none; }

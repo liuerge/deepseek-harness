@@ -81,7 +81,7 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
           onChange={(event) => { setEmployee({ ...employee, provider: event.target.value, model: '' }) }}>
           <option value="">{t('roster.choose-connection')}</option>
           {employee.provider && !connection && <option value={employee.provider}>{employee.provider}</option>}
-          {connections.map(item => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
+          {connections.map(item => <option key={item.id} value={item.id}>{item.name === item.id ? item.name : `${item.name} · ${item.id}`}</option>)}
         </select></label>
         <label>{t('roster.model')}<Input required list={modelList} value={employee.model} disabled={!!pending || !connection}
           onChange={(event) => { setEmployee({ ...employee, model: event.target.value }) }} />
