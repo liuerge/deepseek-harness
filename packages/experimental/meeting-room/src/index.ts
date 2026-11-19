@@ -10,6 +10,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MeetingStore } from './store.ts'
+import { resolveEmployeeRoute } from './employee-route.ts'
 import { registerProjectTools } from './project-tools.ts'
 import ProjectDashboard from './dashboard.ts'
 import ProjectRoster from './roster-management.ts'
@@ -241,7 +242,7 @@ export default class MeetingRoom extends Service {
             provider: this.config.provider, label: role.name, parent,
             prompt: [{ type: 'text', text: rolePrompt(request, role, employee) }], signal: activeSignal, delivery: 'caller',
             ...(employee === undefined ? {} : {
-              agentOptions: { provider: employee.provider, model: employee.model },
+              agentOptions: resolveEmployeeRoute(this.ctx, employee, activeSignal),
               ...(employee.preset === undefined ? {} : { agentPreset: employee.preset }),
             }),
           })

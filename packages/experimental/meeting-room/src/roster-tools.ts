@@ -2,8 +2,10 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
+import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { MeetingStore } from './store.ts'
+import { assertEmployeeRouteConfig } from './employee-route.ts'
 import type { EmployeeId, ProjectTeamId } from './types.ts'
 
 /**
@@ -32,9 +34,15 @@ export function registerRosterTools(ctx: Context, store: MeetingStore): void {
       responsibility: { type: 'string', required: true, description: 'Persistent work responsibilities and instructions.' },
       provider: { type: 'string', required: true, description: 'Configured model provider.' },
       model: { type: 'string', required: true, description: 'Model id on that provider.' },
+      reasoningEffort: { type: 'string', description: 'Adapter reasoning effort for this provider/model; omission keeps the model default.' },
+      fallbacks: { type: 'array', description: 'Ordered backup provider/model routes tried when the primary is unavailable.' },
       preset: { type: 'string', description: 'Registered DSH preset. Omission uses the caller composition.' },
     }, output,
     execute: (args) => {
+      const fallbacks = z.array(z.object({ provider: z.string().min(1), model: z.string().min(1) })).safeParse(args.fallbacks ?? [])
+      if (!fallbacks.success) throw new ToolArgsError(['fallbacks must be a list of provider/model routes.'])
+      assertEmployeeRouteConfig(ctx, args.provider, args.model)
+      for (const route of fallbacks.data) assertEmployeeRouteConfig(ctx, route.provider, route.model)
       if (!Number.isSafeInteger(args.expectedRevision) || args.expectedRevision < 0 || args.expectedRevision >= Number.MAX_SAFE_INTEGER) {
         throw new ToolArgsError(['expectedRevision must be a non-negative safe integer with room for the next revision.'])
       }
@@ -46,6 +54,8 @@ export function registerRosterTools(ctx: Context, store: MeetingStore): void {
       return Promise.resolve(JSON.stringify(store.saveEmployee({
         id: brandString<EmployeeId>(args.id ?? randomUUID()), revision: args.expectedRevision + 1,
         name: args.name, responsibility: args.responsibility, provider: args.provider, model: args.model,
+        ...(args.reasoningEffort === undefined ? {} : { reasoningEffort: args.reasoningEffort }),
+        ...(fallbacks.data.length === 0 ? {} : { fallbacks: fallbacks.data }),
         ...(args.preset === undefined ? {} : { preset: args.preset }),
       }, args.expectedRevision)))
     },

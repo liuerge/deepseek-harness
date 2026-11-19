@@ -20,6 +20,16 @@ export interface RosterEditorProps {
   t: (key: MeetingRoomKey) => string
 }
 
+/** Parses the multiline provider/model fallback editor into route records. */
+function parseFallbacks(value: string): { provider: string; model: string }[] {
+  return value.split('\n').map(line => line.trim()).filter(Boolean).map((line) => {
+    const slash = line.indexOf('/')
+    return slash < 0
+      ? { provider: line, model: '' }
+      : { provider: line.slice(0, slash), model: line.slice(slash + 1) }
+  })
+}
+
 /**
  * Edit an explicit employee route and team template before delegation.
  * @param props - Current roster, advisory model catalog and version-checked actions.
@@ -33,11 +43,13 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
   const [error, setError] = useState<'employee' | 'team' | undefined>()
   const modelList = useId()
   const connection = connections.find(item => item.id === employee?.provider)
+  const selectedModel = connection?.models.find(item => item.id === employee?.model)
+  const efforts = selectedModel?.efforts ?? []
   const editEmployee = (value?: Employee): void => {
     setError(undefined)
     setEmployee(value === undefined
-      ? { expectedRevision: 0, name: '', responsibility: '', provider: '', model: '' }
-      : { ...value, expectedRevision: value.revision })
+      ? { expectedRevision: 0, name: '', responsibility: '', provider: '', model: '', fallbacks: [] }
+      : { ...value, expectedRevision: value.revision, fallbacks: value.fallbacks ?? [] })
     setTeam(undefined)
   }
   const editTeam = (value?: ProjectTeam): void => {
@@ -84,10 +96,20 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
           {connections.map(item => <option key={item.id} value={item.id}>{item.name === item.id ? item.name : `${item.name} · ${item.id}`}</option>)}
         </select></label>
         <label>{t('roster.model')}<Input required list={modelList} value={employee.model} disabled={!!pending || !connection}
-          onChange={(event) => { setEmployee({ ...employee, model: event.target.value }) }} />
+          onChange={(event) => { setEmployee({ ...employee, model: event.target.value, reasoningEffort: undefined }) }} />
         <datalist id={modelList}>{connection?.models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</datalist>
         </label>
       </div>
+      {efforts.length > 0 && <label>{selectedModel?.name}
+        <select value={employee.reasoningEffort ?? ''} disabled={!!pending}
+          onChange={(event) => { setEmployee({ ...employee, reasoningEffort: event.target.value || undefined }) }}>
+          <option value="">—</option>
+          {efforts.map(effort => <option key={effort.id} value={effort.id}>{effort.name}</option>)}
+        </select>
+      </label>}
+      <label>{t('roster.fallbacks')}<textarea disabled={!!pending}
+        value={(employee.fallbacks ?? []).map(route => `${route.provider}/${route.model}`).join('\n')}
+        onChange={(event) => { setEmployee({ ...employee, fallbacks: parseFallbacks(event.target.value) }) }} /></label>
       {openModelSettings && <div className={css.actions}>
         <Button disabled={!!pending} onClick={openModelSettings}>{t('roster.model-settings')}</Button>
       </div>}

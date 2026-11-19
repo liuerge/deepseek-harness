@@ -8,6 +8,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { ToolContextUnavailableError, type ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Config } from './index.ts'
+import { resolveEmployeeRoute } from './employee-route.ts'
 import type { AcceptanceArtifact, AcceptanceReport, EmployeeId, ProjectPlan, ProjectPlanId, PlanTask } from './types.ts'
 
 const criterionResultSchema = z.object({
@@ -123,7 +124,7 @@ export async function reviewTask(ctx: Context, config: Config, parent: Agent, pl
     try {
       const activation = await ctx.subagents.startActivation({
         provider: config.provider, parent, cwd, signal, delivery: 'caller', label: employee.name,
-        agentOptions: { provider: employee.provider, model: employee.model },
+        agentOptions: resolveEmployeeRoute(ctx, employee, signal),
         ...(employee.preset === undefined ? {} : { agentPreset: employee.preset }),
         outputSchema: resultSchema(review.criteria.map(criterion => criterion.id), artifacts.map(artifact => artifact.path)),
         prompt: [{ type: 'text', text: [

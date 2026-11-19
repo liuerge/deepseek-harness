@@ -6,13 +6,15 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { z } from 'zod'
 import type { MeetingStore } from './store.ts'
+import { assertEmployeeRouteConfig, employeeReasoningEfforts } from './employee-route.ts'
 import type { Employee, EmployeeId, ProjectTeam, ProjectTeamId, EmployeeSaveInput, TeamSaveInput, RosterConnection } from './types.ts'
 
 const text = z.string().trim().min(1)
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER - 1)
 const employeeInput = z.object({
   id: text.optional(), expectedRevision: revision, name: text, responsibility: text,
-  provider: text, model: text, preset: text.optional(),
+  provider: text, model: text, reasoningEffort: text.optional(),
+  fallbacks: z.array(z.object({ provider: text, model: text })).default([]), preset: text.optional(),
 })
 const teamInput = z.object({ id: text.optional(), expectedRevision: revision, name: text, memberIds: z.array(text).min(1) })
 
@@ -49,7 +51,7 @@ export default class ProjectRoster extends TypertRemoteService {
       const deadline = AbortSignal.any([active, AbortSignal.timeout(this.options.modelCatalogTimeoutMs)])
       let abort: (() => void) | undefined
       try {
-        const models = await Promise.race([
+        const modelsFromCatalog = await Promise.race([
           this.ctx.llm.listModels(provider.id),
           new Promise<never>((_resolve, reject) => {
             abort = () => { reject(new HarnessError('Model catalog discovery stopped.', 'PROJECT_MODEL_CATALOG_CANCELLED')) }
@@ -58,7 +60,19 @@ export default class ProjectRoster extends TypertRemoteService {
           }),
         ])
         active.throwIfAborted()
-        return { ...provider, models: models.map(model => ({ id: model.id, name: model.name })), failed: false }
+        // Effort discovery is advisory: a catalog entry with no reasoning
+        // metadata simply omits the field, and a lookup failure keeps the model.
+        const efforts = await Promise.all(modelsFromCatalog.map(model =>
+          employeeReasoningEfforts(this.ctx, provider.id, model.id, deadline)))
+        const effortByModel = new Map(modelsFromCatalog.map((model, index) => [model.id, efforts[index] ?? []] as const))
+        const models = modelsFromCatalog.map((model) => {
+          const declared = effortByModel.get(model.id)
+          return declared !== undefined && declared.length > 0
+            ? { id: model.id, name: model.name, efforts: [...declared] }
+            : { id: model.id, name: model.name }
+        })
+        active.throwIfAborted()
+        return { ...provider, models, failed: false }
       } catch (_error) {
         active.throwIfAborted()
         return { ...provider, models: [], failed: true }
@@ -82,9 +96,15 @@ export default class ProjectRoster extends TypertRemoteService {
     if (!this.ctx.llm.listProviders().some(provider => provider.id === fields.provider)) {
       throw new HarnessError('The selected model connection is unavailable. Refresh connections before saving.', 'PROJECT_ROSTER_PROVIDER')
     }
+    // The board dispatch path bypasses the tool-subagent allowlist, so enforce
+    // the Host policy here (and again at dispatch) before a route is persisted.
+    assertEmployeeRouteConfig(this.ctx, fields.provider, fields.model)
+    for (const fallback of fields.fallbacks) assertEmployeeRouteConfig(this.ctx, fallback.provider, fallback.model)
     return Promise.resolve(this.store.saveEmployee({
       id: brandString<EmployeeId>(fields.id ?? randomUUID()), revision: fields.expectedRevision + 1,
       name: fields.name, responsibility: fields.responsibility, provider: fields.provider, model: fields.model,
+      ...(fields.reasoningEffort === undefined ? {} : { reasoningEffort: fields.reasoningEffort }),
+      ...(fields.fallbacks.length === 0 ? {} : { fallbacks: fields.fallbacks }),
       ...(fields.preset === undefined ? {} : { preset: fields.preset }),
     }, fields.expectedRevision))
   }

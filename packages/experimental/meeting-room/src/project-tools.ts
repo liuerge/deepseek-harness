@@ -9,6 +9,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import type { Config } from './index.ts'
 import type { MeetingStore } from './store.ts'
+import { resolveEmployeeRoute, resolveEmployeeFallback } from './employee-route.ts'
 import type { EmployeeId, ProjectPlanId, ProjectExecutionId, AcceptanceReport, ProjectTeamLinkState } from './types.ts'
 import { verifyPlanDocument, requireGitProject } from './plan-document.ts'
 import { reviewTask, verifyAcceptanceArtifacts } from './acceptance.ts'
@@ -236,14 +237,18 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
             const gate = workerId === undefined ? undefined : claimGates(workerId)
             let activation: SubagentActivation
             try {
+              const repairAttempt = repairing && rework && index === latest.index
+                ? rework.attempt : undefined
+              const workerRoute = task.employee === undefined ? config.agentOptions
+                : (repairAttempt === undefined ? undefined
+                  : resolveEmployeeFallback(ctx, task.employee, repairAttempt, signal))
+                  ?? resolveEmployeeRoute(ctx, task.employee, signal)
               activation = await ctx.subagents.startActivation({
                 provider: config.provider, label: task.employee?.name ?? task.role, parent, cwd,
                 prompt: [{ type: 'text', text: prompt }], signal, delivery: 'caller',
                 ...(workerId === undefined ? {} : { childId: workerId }),
-                ...(task.employee === undefined
-                  ? config.agentOptions === undefined ? {} : { agentOptions: config.agentOptions }
-                  : { agentOptions: { provider: task.employee.provider, model: task.employee.model },
-                    ...(task.employee.preset === undefined ? {} : { agentPreset: task.employee.preset }) }),
+                ...(workerRoute === undefined ? {} : { agentOptions: workerRoute }),
+                ...(task.employee?.preset === undefined ? {} : { agentPreset: task.employee.preset }),
               })
             } catch (error) {
               gate?.fail(error)

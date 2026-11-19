@@ -42,6 +42,10 @@ export interface EmployeeSaveInput {
   provider: string
   /** Model id, including provider-supported ids absent from its advisory catalog. */
   model: string
+  /** Optional reasoning effort the adapter declares for this provider/model. */
+  reasoningEffort?: string | undefined
+  /** Ordered backup routes, tried when the primary route is unavailable. */
+  fallbacks?: { provider: string; model: string }[] | undefined
   /** Optional registered DSH capability composition. */
   preset?: string | undefined
 }
@@ -64,8 +68,8 @@ export interface RosterConnection {
   id: string
   /** Provider display name. */
   name: string
-  /** Advertised models; an empty list does not prohibit custom model ids. */
-  models: { id: string; name: string }[]
+  /** Advertised models with the reasoning efforts each route declares. */
+  models: { id: string; name: string; efforts?: { id: string; name: string; description?: string }[] }[]
   /** Whether catalog discovery failed for this route. */
   failed: boolean
 }
@@ -84,6 +88,10 @@ export interface Employee {
   provider: string
   /** Model identifier on that provider. */
   model: string
+  /** Explicit adapter reasoning effort; inherited efforts are cleared when the route changes. */
+  reasoningEffort?: string | undefined
+  /** Ordered backup routes for the same worker, tried before abandoning the task. */
+  fallbacks?: { provider: string; model: string }[] | undefined
   /** Registered DSH preset selecting persona, tools and skills. */
   preset?: string | undefined
 }

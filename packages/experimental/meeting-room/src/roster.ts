@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { EmployeeId, ProjectTeamId } from './types.ts'
 
-/** Saved employee JSON validation, including its model and optional preset. */
+/** Saved employee JSON validation, including its model, effort, backups and optional preset. */
+export const modelRouteSchema = z.object({
+  provider: z.string().trim().min(1),
+  model: z.string().trim().min(1),
+})
+
 export const employeeSchema = z.object({
   id: z.string().min(1).transform(id => brandString<EmployeeId>(id)),
   revision: z.number().int().positive(),
@@ -11,6 +16,8 @@ export const employeeSchema = z.object({
   responsibility: z.string().trim().min(1),
   provider: z.string().trim().min(1),
   model: z.string().trim().min(1),
+  reasoningEffort: z.string().trim().min(1).optional(),
+  fallbacks: z.array(modelRouteSchema).optional(),
   preset: z.string().trim().min(1).optional(),
 })
 
