@@ -64,7 +64,7 @@ describe('ui-settings-general shell', () => {
     expect(state.getSnapshot().activeId).toBe('models')
     await c.unload(SELF)
     expect(c.ctx.get('settingsNavigation')).toBeUndefined()
-  })
+  }, COLD_BOOT_TIMEOUT_MS)
   it('shares one carrier subscription between both update locations and releases it on unload', async ({ start }) => {
     const initial = Promise.withResolvers<DesktopUpdatePresentation>()
     let publish: ((state: DesktopUpdatePresentation) => void) | undefined

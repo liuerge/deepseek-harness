@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +22,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import MeetingRoom from '../src/index.ts'
 import { MeetingStore } from '../src/store.ts'
 import { projectPlanSchema } from '../src/plans.ts'
+import { observePlanDocument } from '../src/plan-document.ts'
 import type { EmployeeId, ProjectTeamId } from '../src/types.ts'
 
 /** Contexts created by these fixtures; the spec disposes them after each test. */
@@ -43,6 +45,8 @@ export async function setupTeam(script: TeamScript) {
   const adapter = new MockAdapter(script)
   const directory = await mkdtemp(join(tmpdir(), 'team-dispatch-'))
   directories.push(directory)
+  execFileSync('git', ['init', '--quiet', directory])
+  await writeFile(join(directory, 'plan.md'), '# Dispatch plan\n')
   const databasePath = join(directory, 'meetings.sqlite')
   await ctx.plugin(LocalFileSystem, { cwd: directory })
   await mountAgentLoopTestDependencies(ctx)
@@ -117,7 +121,7 @@ export async function teamFixture(options: TeamFixtureOptions) {
     criteria: [{ id: 'AC-1', description: 'Delivery content', method: 'Read the artifact',
       expected: 'Initial delivery', evidence: 'dispatch.md' }],
   }
-  const plan = store.savePlan(projectPlanSchema.parse({ id: 'dispatch-plan', revision: 1,
+  const plan = store.savePlan(projectPlanSchema.parse({ document: await observePlanDocument(ctx, 'plan.md', directory, 4194304, new AbortController().signal), id: 'dispatch-plan', revision: 1,
     goal: 'Dispatch reliability', background: [], team, employees: [author, reviewer], confirmed: false,
     tasks: [
       { role: 'Author', employeeId: author.id, instruction: 'Produce dispatch.md', acceptance: 'Content matches',
