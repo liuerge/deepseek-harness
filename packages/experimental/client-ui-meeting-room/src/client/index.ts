@@ -18,6 +18,8 @@ import { mountSessionMeetings } from './session-meetings.ts'
 import { prepareMainPrompt } from './session-navigation.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SessionProjects, ProjectSectionActions } from './SessionProjects.tsx'
+// The Session panel owns the panel-section SlotMap declarations this package registers into.
+import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import { mountTeamPicker } from './team-picker.ts'
 import { mountSessionArtifacts } from './session-artifacts-view.ts'
 import type { EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
@@ -193,7 +195,7 @@ function mountProjectPage(ctx: ClientContext): void {
   }, SessionProjects))
   ctx.slots.inject('conversation.session.panel.section.actions', () => ctx.slots.register({
     name: 'conversation.session.panel.section.actions', key: 'project-tasks', locale: NS,
-    inject: () => ({ refresh, openWorkspace: () => { ctx.layout.selectPanel(id) } }),
+    inject: () => ({ refresh, openWorkspace: () => { ctx.layout.selectPanel(id) }, hooks: { catalog } }),
   }, ProjectSectionActions))
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: id, locale: NS,

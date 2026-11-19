@@ -230,11 +230,13 @@ export function ProjectPage(props: Props) {
         </p>}
         {artifactPaths.length > 0 && <div className={css.chips}>{artifactPaths.map(path =>
           <FileChip key={path} path={path} triggerProps={fileTrigger(record?.sessionId, path)} />)}</div>}
-        {parentId && childId && <Button
-          onClick={() => { openWorker(parentId, childId) }}>{t('project.open-worker')}</Button>}
-        <Button onClick={() => { setOpenDetail(open ? null : { id, index }) }}>
-          {t(open ? 'board.close' : 'board.task-detail')}
-        </Button>
+        <div className={css.cardActions}>
+          {parentId && childId && <Button
+            onClick={() => { openWorker(parentId, childId) }}>{t('project.open-worker')}</Button>}
+          <Button onClick={() => { setOpenDetail(open ? null : { id, index }) }}>
+            {t(open ? 'board.close' : 'board.task-detail')}
+          </Button>
+        </div>
       </article>)
     })
     const title = entries.length > 1 ? `${t('board.title')} · ${goalRecord?.goal ?? id}` : t('board.title')

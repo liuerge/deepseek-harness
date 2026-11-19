@@ -19,7 +19,9 @@ export type SessionProjectsProps =
   & InjectFace<Pick<SessionProjectsInjected, 'hooks'>>
 
 /** Registration-side business face of the section title's trailing controls. */
-export type ProjectSectionActionsInjected = Pick<SessionProjectsInjected, 'refresh' | 'openWorkspace'>
+export type ProjectSectionActionsInjected = Pick<SessionProjectsInjected, 'refresh' | 'openWorkspace'> & {
+  hooks: Pick<SessionProjectsInjected['hooks'], 'catalog'>
+}
 
 /** Full props of the section title's trailing controls. */
 export type ProjectSectionActionsProps =

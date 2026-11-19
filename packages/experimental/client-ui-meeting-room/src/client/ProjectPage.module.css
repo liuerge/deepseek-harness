@@ -1,4 +1,6 @@
 .page { display: flex; flex: 1; flex-direction: column; gap: 20px; min-width: 0; max-width: 1100px; width: 100%; box-sizing: border-box; margin-inline: auto; padding: 24px clamp(24px, 4vw, 48px) 48px; overflow: auto; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
+/* The sheet's scrollbars sit beside the elevated board cards, so they pair with the l2 elevation rung. */
+.page, .boardFullscreen, .columns { --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2); --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2); }
 .header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .header h1 { margin: 0; font-size: 22px; line-height: 30px; font-weight: 600; }
 .header h2 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
@@ -44,13 +46,15 @@
 .columnDot { flex: none; }
 .columnBody { display: flex; flex: 1; flex-direction: column; gap: 10px; padding: 10px; }
 @media (max-width: 1240px) { .columns { grid-template-columns: repeat(5, minmax(140px, 1fr)); } }
-.count { min-width: 20px; margin-left: auto; padding: 0 7px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); text-align: center; font-size: 12px; font-weight: 500; }
+.count { min-width: 20px; margin-left: auto; padding: 0 7px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; corner-shape: round; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); text-align: center; font-size: 12px; font-weight: 500; }
 .emptyColumn { margin: 0; padding: 16px 8px; border: 1px dashed var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-tertiary); text-align: center; font-size: 12px; }
-.card { display: grid; gap: 8px; padding: 12px; border: 0; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-panel); }
+/* bg-layer-3 is the lightest surface rung, so the card floats above the column fill in the dark palette too. */
+.card { display: grid; gap: 8px; padding: 12px; border: 0; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-3); box-shadow: var(--dsw-elevation-panel); }
 .cardHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
 .cardHead strong { font-weight: 600; }
 .cardTitle { margin: 0; }
-.card > button { justify-self: start; }
+.cardActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cardActions > button { flex: none; }
 .cardNote { margin: 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .detailPanel { display: grid; gap: 8px; padding: 20px 24px; border: 0; border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-card-fill); box-shadow: var(--dsw-elevation-prominent); }
 .detailPanel pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 8px 0; }

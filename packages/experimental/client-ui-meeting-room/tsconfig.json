@@ -36,7 +36,7 @@
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {
-      "path": "../../client/ui-workspace"
+      "path": "../../client/ui-workspace/tsconfig.client.json"
     },
     {
       "path": "../meeting-room"
@@ -58,6 +58,9 @@
     },
     {
       "path": "../../team/agent-team"
+    },
+    {
+      "path": "../../client/ui-session-panel"
     },
     {
       "path": "../../client/ui-settings/tsconfig.client.json"
