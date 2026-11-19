@@ -231,9 +231,9 @@ export function ProjectPage(props: Props) {
         {artifactPaths.length > 0 && <div className={css.chips}>{artifactPaths.map(path =>
           <FileChip key={path} path={path} triggerProps={fileTrigger(record?.sessionId, path)} />)}</div>}
         <div className={css.cardActions}>
-          {parentId && childId && <Button
+          {parentId && childId && <Button size="sm"
             onClick={() => { openWorker(parentId, childId) }}>{t('project.open-worker')}</Button>}
-          <Button onClick={() => { setOpenDetail(open ? null : { id, index }) }}>
+          <Button size="sm" onClick={() => { setOpenDetail(open ? null : { id, index }) }}>
             {t(open ? 'board.close' : 'board.task-detail')}
           </Button>
         </div>

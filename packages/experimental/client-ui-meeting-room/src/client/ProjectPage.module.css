@@ -53,8 +53,9 @@
 .cardHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
 .cardHead strong { font-weight: 600; }
 .cardTitle { margin: 0; }
-.cardActions { display: flex; flex-wrap: wrap; gap: 8px; }
-.cardActions > button { flex: none; }
+/* The card actions stay on one row; the narrow board columns shrink the labels instead of stacking the buttons. */
+.cardActions { display: flex; flex-wrap: nowrap; gap: 8px; }
+.cardActions > button { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cardNote { margin: 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .detailPanel { display: grid; gap: 8px; padding: 20px 24px; border: 0; border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-card-fill); box-shadow: var(--dsw-elevation-prominent); }
 .detailPanel pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 8px 0; }
