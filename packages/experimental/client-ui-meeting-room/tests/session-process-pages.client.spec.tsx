@@ -7,7 +7,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { Employee, ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
 import { SessionMeetings, type MeetingCatalog } from '../src/client/SessionMeetings.tsx'
 import { ProjectPage, type ProjectCheckpoint } from '../src/client/ProjectPage.tsx'
-import { SessionProjects } from '../src/client/SessionProjects.tsx'
+import { SessionProjects, ProjectSectionActions } from '../src/client/SessionProjects.tsx'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -131,10 +131,13 @@ it('filters existing-catalog project tasks by the exact main conversation and la
   const catalog = { records, connections: [], connectionsLoading: false, connectionsFailed: false,
     employees: [], teams: [], plans: [], loading: false, failed: false }
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
-  render(<SessionProjects {...{ sessionId: 'main', useCatalog, t: makeTranslate(zh), refresh: vi.fn(), openWorkspace: vi.fn() } as Parameters<typeof SessionProjects>[0]} />)
+  render(<SessionProjects {...{ sessionId: 'main', useCatalog, t: makeTranslate(zh) } as Parameters<typeof SessionProjects>[0]} />)
   expect(screen.getByText('Main project')).toBeTruthy()
   expect(screen.queryByText('Unrelated project')).toBeNull()
   expect(screen.getByText('已产出 1 / 1 项，产出仍需按约定验收')).toBeTruthy()
+  render(<ProjectSectionActions {...{ useCatalog, t: makeTranslate(zh), refresh: vi.fn(),
+    openWorkspace: vi.fn() } as Parameters<typeof ProjectSectionActions>[0]} />)
+  expect(screen.getByRole('button', { name: zh['project.open-workspace'] })).toBeTruthy()
 })
 
 it('opens the board in a viewport dialog and returns to the inline board', () => {

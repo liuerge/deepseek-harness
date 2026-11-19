@@ -17,7 +17,7 @@ import { MeetingPanelIcon } from './MeetingPanelIcon.tsx'
 import { mountSessionMeetings } from './session-meetings.ts'
 import { prepareMainPrompt } from './session-navigation.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { SessionProjects } from './SessionProjects.tsx'
+import { SessionProjects, ProjectSectionActions } from './SessionProjects.tsx'
 import { mountTeamPicker } from './team-picker.ts'
 import { mountSessionArtifacts } from './session-artifacts-view.ts'
 import type { EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
@@ -184,10 +184,17 @@ function mountProjectPage(ctx: ClientContext): void {
       openWorkspace: () => { child.layout.selectPanel(id) },
     })
   })
-  ctx.slots.inject('conversation.session.header.actions.subagent.footer', () => ctx.slots.register({
-    name: 'conversation.session.header.actions.subagent.footer', id: 'project-tasks', locale: NS, order: 30,
-    inject: () => ({ hooks: { catalog }, refresh, openWorkspace: () => { ctx.layout.selectPanel(id) } }),
+  ctx.slots.inject('conversation.session.panel.section', () => ctx.slots.register({
+    name: 'conversation.session.panel.section', id: 'project-tasks', locale: NS,
+    // After background jobs (300).
+    order: 400,
+    label: () => t('project.session-tasks'),
+    inject: () => ({ hooks: { catalog } }),
   }, SessionProjects))
+  ctx.slots.inject('conversation.session.panel.section.actions', () => ctx.slots.register({
+    name: 'conversation.session.panel.section.actions', key: 'project-tasks', locale: NS,
+    inject: () => ({ refresh, openWorkspace: () => { ctx.layout.selectPanel(id) } }),
+  }, ProjectSectionActions))
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: id, locale: NS,
     inject: () => ({ hooks: { catalog }, refresh,
