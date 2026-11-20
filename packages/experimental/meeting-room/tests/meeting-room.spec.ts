@@ -669,7 +669,9 @@ describe('meeting room', () => {
       expect(reports[0]?.artifacts[0]?.sha256).not.toBe(reports[1]?.artifacts[0]?.sha256)
       expect(reports[0]?.reviewers[0]?.sessionId).not.toBe(reports[1]?.reviewers[0]?.sessionId)
       expect(history.filter(entry => entry.state === 'starting' && entry.index === 1)).toHaveLength(1)
-      expect(JSON.stringify(adapter.requests)).toContain('Failed independent acceptance')
+      const repairPrompt = JSON.stringify(adapter.requests)
+      expect(repairPrompt).toContain('Observed acceptance failures')
+      expect(repairPrompt).not.toContain('Failed independent acceptance')
       const requestCount = adapter.requests.length
       const stale = await execute({ projectId: blocked.projectId, expectedCheckpoint: blocked.checkpoint })
       expect(stale.results[0]?.result.isError).toBe(true)

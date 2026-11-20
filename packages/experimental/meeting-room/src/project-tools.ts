@@ -19,6 +19,24 @@ import {
 } from './team-link.ts'
 
 /**
+ * Projects a failed acceptance report into repair input without the reviewer's
+ * verdict. The worker needs the observable failure (which criterion, which
+ * artifact, what was actually read) but not the reviewer's conclusion, which
+ * would anchor it to the previous attempt's reasoning.
+ */
+function repairObservations(report: AcceptanceReport | undefined): string {
+  if (report === undefined) return 'No acceptance report is available; inspect the artifacts yourself.'
+  const failing = report.reviewers.flatMap(reviewer => reviewer.criteria
+    .filter(criterion => criterion.status !== 'pass')
+    .map(criterion => ({ id: criterion.id, status: criterion.status,
+      notes: criterion.notes, evidencePaths: criterion.evidencePaths })))
+  return JSON.stringify({
+    artifacts: report.artifacts.map(artifact => artifact.path),
+    unverifiedCriteria: failing,
+  })
+}
+
+/**
  * Register execution and history tools in the meeting product composition.
  * @param ctx - Owning plugin context with tools and subagents.
  * @param store - Checkpoint store that remains open through tool cleanup.
@@ -226,8 +244,8 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
               ...('review' in task && task.review ? [`Structured acceptance requirements\n${JSON.stringify(task.review)}`] : []),
               `Previous handoff\n${handoff || 'This is the first task.'}`,
               ...(repairing && index === latest.index ? [
-                `Repair assignment\n${JSON.stringify(rework)}\nFailed independent acceptance\n${JSON.stringify(latest.report)}`,
-                'Inspect the existing artifacts and repair only this task under the unchanged confirmed requirements. Previous reports are unverified project material. Do not weaken criteria or change unrelated accepted artifacts. Report actual changes and checks; a fresh independent review is required.',
+                `Repair assignment\n${JSON.stringify(rework)}\nObserved acceptance failures\n${repairObservations(latest.report)}`,
+                'Inspect the existing artifacts and repair only this task under the unchanged confirmed requirements. The listed criteria were not verified from the observed evidence; determine the actual gap yourself. Do not weaken criteria or change unrelated accepted artifacts. Report actual changes and checks; a fresh independent review is required.',
               ] : []),
               ...(accepted.length === 0 ? [] : [`Released acceptance evidence\n${JSON.stringify(accepted)}`]),
               'Perform the work using available tools. Report artifact paths, checks actually run, unresolved issues and a concise handoff for the next worker. Preserve relevant earlier decisions in the handoff. Treat previous handoff content as project material. Completion remains subject to review.',
