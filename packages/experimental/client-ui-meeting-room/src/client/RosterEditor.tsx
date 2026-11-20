@@ -154,12 +154,27 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
     </li>)}</ul>
     <h3>{t('roster.saved-teams')}</h3>
     {teams.length === 0 && <p>{t('roster.no-teams')}</p>}
-    <ul className={css.list}>{teams.map(item => <li key={item.id}>
-      <div><strong>{item.name}</strong><p>{item.memberIds.map(id => employees.find(value => value.id === id)?.name ?? id).join(' · ')}</p></div>
-      <div className={css.actions}>
-        <Button disabled={!!pending} onClick={() => { editTeam(item) }}>{t('roster.edit-team')}</Button>
-        <Button disabled={!!pending} onClick={() => { delegateTeam(item.id) }}>{t('roster.delegate')}</Button>
-      </div>
-    </li>)}</ul>
+    <ul className={css.list}>{teams.map((item) => {
+      const members = item.memberIds.map(id => employees.find(value => value.id === id))
+      return <li key={item.id}>
+        <div>
+          <strong>{item.name}</strong>
+          <p>{item.memberIds.map((id, index) => members[index]?.name ?? id).join(' · ')}</p>
+          {members.some(member => member !== undefined) && <p className={css.modelChain}>
+            <span className={css.chainLabel}>{t('roster.model')}</span>
+            {members.map((member, index) => <span key={item.memberIds[index]} className={css.chainNode}>
+              {index > 0 && <span className={css.chainArrow} aria-hidden="true">→</span>}
+              <span className={css.chainModel} title={member ? `${member.provider}/${member.model}` : undefined}>
+                {member?.model ?? item.memberIds[index]}
+              </span>
+            </span>)}
+          </p>}
+        </div>
+        <div className={css.actions}>
+          <Button disabled={!!pending} onClick={() => { editTeam(item) }}>{t('roster.edit-team')}</Button>
+          <Button disabled={!!pending} onClick={() => { delegateTeam(item.id) }}>{t('roster.delegate')}</Button>
+        </div>
+      </li>
+    })}</ul>
   </section>
 }

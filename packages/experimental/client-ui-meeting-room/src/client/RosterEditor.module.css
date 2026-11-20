@@ -20,4 +20,10 @@
 .list li > div:first-child { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
 .list strong { font-weight: 500; }
 .list p { margin: 4px 0 0; }
+/* Model chain: ordered member models on a team card, so a mixed-model roster is visible at a glance. */
+.modelChain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px !important; font-size: 12px; }
+.chainLabel { color: var(--dsw-alias-label-tertiary); }
+.chainNode { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.chainArrow { color: var(--dsw-alias-label-tertiary); }
+.chainModel { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 8px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-1); }
 @media (pointer: coarse) { .form input, .form select, .form textarea { font-size: 16px; } }

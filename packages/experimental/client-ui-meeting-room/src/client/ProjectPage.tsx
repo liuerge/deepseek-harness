@@ -367,29 +367,44 @@ export function ProjectPage(props: Props) {
       <header className={css.header}>
         <h2>{t('plan.title')}</h2><Button onClick={preparePlan}>{t('plan.prepare')}</Button>
       </header>
-      {plans.map((plan) => {
+      {plans.map((plan, planIndex) => {
         const mainSession = plan.originSessionId ?? catalog.records.find(record => record.projectId === plan.executionId)?.sessionId
-        return <article key={plan.id} id={`plan-${plan.id}`}>
-          <header className={css.header}><h3>{plan.goal}</h3>
+        const started = plan.executionId !== undefined
+        return <article key={plan.id} id={`plan-${plan.id}`} className={css.planCard}>
+          <header className={css.planCardHead}>
+            <h3><span className={css.planIndex}>{String(planIndex + 1).padStart(2, '0')}</span>{plan.goal}</h3>
             <Button disabled={!mainSession} onClick={() => { editPlan(plan.id, plan.revision) }}>{t('plan.edit')}</Button>
           </header>
-          <p>{t('plan.version', { revision: plan.revision })} · {plan.team.name} · <StatusChip tone={statusTone(plan.confirmed ? 'confirmed' : 'draft')}>{t(plan.confirmed ? 'plan.confirmed' : 'plan.draft')}</StatusChip></p>
-          <p>{plan.document
-            ? <FileChip path={plan.document.path} triggerProps={fileTrigger(mainSession, plan.document.path)} />
-            : t('artifacts.missing-document')}</p>
-          <ul className={css.tasks}>{plan.employees.map(employee => <li key={employee.id}>
-            <strong>{employee.name}</strong> {employee.provider} / {employee.model}
+          <div className={css.planMeta}>
+            <span>{t('plan.version', { revision: plan.revision })}</span>
+            <span>·</span>
+            <span>{plan.team.name}</span>
+            <StatusChip tone={statusTone(plan.confirmed ? 'confirmed' : 'draft')}>
+              {t(plan.confirmed ? 'plan.confirmed' : 'plan.draft')}
+            </StatusChip>
+            {started && <StatusChip tone={statusTone('started')}>{t('project.started')}</StatusChip>}
+            <span>{plan.document
+              ? <FileChip path={plan.document.path} triggerProps={fileTrigger(mainSession, plan.document.path)} />
+              : t('artifacts.missing-document')}</span>
+          </div>
+          <ul className={css.planEmployees}>{plan.employees.map(employee => <li key={employee.id}>
+            <div className={css.planEmployeeHead}>
+              <strong>{employee.name}</strong>
+              <span className={css.routeTag}>{employee.provider} / {employee.model}</span>
+            </div>
             <p>{employee.responsibility}</p>{employee.preset && <p>{employee.preset}</p>}
           </li>)}</ul>
           {plan.background.length > 0 && <details>
             <summary>{t('plan.background')}</summary>
             {plan.background.map((item, index) => <div key={index}><p>{item.title}</p><p>{item.source}</p><pre>{item.content}</pre></div>)}
           </details>}
-          {!mainSession && <p>{t('plan.unlinked')}</p>}
-          {plan.executionId ? <p>{t('project.started')}</p> : plan.confirmed
-            ? <Button disabled={!plan.document || catalog.loading || !mainSession} onClick={() => { runPlan(plan.id, plan.revision) }}>{t('plan.run')}</Button>
-            : <Button variant="primary" disabled={!plan.document || catalog.loading}
-              onClick={() => { void confirmPlan(plan.id, plan.revision) }}>{t('plan.confirm')}</Button>}
+          <div className={css.planActions}>
+            {!mainSession && <span className={css.secondary}>{t('plan.unlinked')}</span>}
+            {!started && (plan.confirmed
+              ? <Button disabled={!plan.document || catalog.loading || !mainSession} onClick={() => { runPlan(plan.id, plan.revision) }}>{t('plan.run')}</Button>
+              : <Button variant="primary" disabled={!plan.document || catalog.loading}
+                onClick={() => { void confirmPlan(plan.id, plan.revision) }}>{t('plan.confirm')}</Button>)}
+          </div>
         </article>
       })}
     </section>
