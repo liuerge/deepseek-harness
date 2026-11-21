@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-meeting-room",
   "description": "Meeting list and meeting detail pages for the meeting room plugin",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
   },
