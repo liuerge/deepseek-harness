@@ -4,7 +4,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { MeetingStore } from '../src/store.ts'
 import { seedPresetRoster } from '../src/preset-roster.ts'
 import { registeredArtifacts } from '../src/dashboard.ts'
-import type { Employee, ProjectPlan } from '../src/types.ts'
+import type { Employee, EmployeeId, ProjectPlan, ProjectTeamId } from '../src/types.ts'
 
 const ROUTE = { provider: 'deepseek-official', model: 'deepseek-flash' }
 
@@ -41,8 +41,8 @@ describe('preset roster seeding', () => {
     const store = new MeetingStore(':memory:')
     seedPresetRoster(store, ROUTE)
     store.saveTeam({
-      id: brandString('user-team'), revision: 1, name: '手动创建的团队',
-      memberIds: [brandString('preset-pm')], allowAssignment: true,
+      id: brandString<ProjectTeamId>('user-team'), revision: 1, name: '手动创建的团队',
+      memberIds: [brandString<EmployeeId>('preset-pm')], allowAssignment: true,
     }, 0)
     seedPresetRoster(store, ROUTE)
     expect(store.teams().map(team => team.name)).toContain('手动创建的团队')
@@ -71,7 +71,7 @@ describe('registered artifacts allowlist', () => {
     id: planId, revision: 1, goal: 'goal', background: [],
     team: { id: 'team' as ProjectPlan['team']['id'], revision: 1, name: 'Team', memberIds: [] },
     employees: [], tasks: [{ role: 'Author', employeeId: 'emp' as Employee['id'], instruction: 'i', acceptance: 'a',
-      review: { reviewerIds: [], release: 'automatic', artifactPaths, downstream: [] } }],
+      review: { reviewerIds: [], release: 'automatic', artifactPaths, downstream: [], criteria: [] } }],
     confirmed: true, document, originSessionId: 'main',
   })
 
