@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { Employee, ProjectTeam, ProjectPlan } from '@deepseek-ai/dsh-meeting-room/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { ProjectPage, type ProjectCheckpoint } from './ProjectPage.tsx'
+import { RosterPanel } from './RosterPanel.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type MeetingRoomKey } from './locales.ts'
 import { MeetingPanelIcon } from './MeetingPanelIcon.tsx'
 import { mountSessionMeetings } from './session-meetings.ts'
@@ -129,14 +130,28 @@ function mountProjectPage(ctx: ClientContext): void {
       if (refreshAgain && !lifetime.signal.aborted) { refreshAgain = false; refresh() }
     })
   }
-  const stream = ctx.remote.$stream<boolean>({
-    name: 'project checkpoints', open: signal => ctx.remote.projectDashboard.follow(signal),
-    ended: () => new Error('Project checkpoint stream ended'),
+  // The dashboard is a push stream; a dropped connection reconnects with capped
+  // backoff so a server restart never leaves the panel silently stale.
+  ctx.effect(() => {
+    const consume = async (): Promise<void> => {
+      let backoff = 2000
+      while (!lifetime.signal.aborted) {
+        const stream = ctx.remote.$stream<boolean>({
+          name: 'project checkpoints', open: signal => ctx.remote.projectDashboard.follow(signal),
+          ended: () => new Error('Project checkpoint stream ended'),
+        })
+        try {
+          for await (const frame of stream) { refresh(); frame.accept() }
+          return
+        } catch (_error) {
+          await new Promise((resolve) => { setTimeout(resolve, backoff) })
+          backoff = Math.min(backoff * 2, 30000)
+        } finally { void stream.dispose() }
+      }
+    }
+    void consume().catch(() => { if (!lifetime.signal.aborted) catalog.update((state) => { state.failed = true }) })
+    return () => { lifetime.abort() }
   })
-  ctx.effect(() => () => stream.dispose())
-  void (async () => {
-    for await (const frame of stream) { refresh(); frame.accept() }
-  })().catch(() => { if (!lifetime.signal.aborted) catalog.update((state) => { state.failed = true }) })
   const confirm = (action: () => Promise<{ ok: boolean }>): Promise<void> => {
     if (confirming || lifetime.signal.aborted || catalog.getSnapshot().loading) return Promise.resolve()
     const priorRead = pending
@@ -180,6 +195,22 @@ function mountProjectPage(ctx: ClientContext): void {
     mainPrompt(sessionId, prompt)
   }
   const id = 'project-workspace' as MainPanelId
+  const rosterPanelId = 'project-roster' as MainPanelId
+  const rosterActions = {
+    hooks: { catalog }, refresh,
+    openModelSettings: () => {
+      try {
+        if (!openSettings) { ctx.contextMenus.notify(t('roster.settings-unavailable')); return }
+        openSettings()
+      }
+      catch (_error) { ctx.contextMenus.notify(t('roster.settings-unavailable')) }
+    },
+    saveEmployee: (input: EmployeeSaveInput) => save(() => ctx.remote.projectRoster.saveEmployee(input, lifetime.signal)),
+    saveTeam: (input: TeamSaveInput) => save(() => ctx.remote.projectRoster.saveTeam(input, lifetime.signal)),
+    delegateTeam: (id: string) => {
+      ctx.uiWorkspace.startSession(undefined, { prompt: `${t('roster.delegatePrompt')}\nteamId=${JSON.stringify(id)}`, whenDraftExists: 'append' })
+    },
+  }
   ctx.inject(['uiConversation'], (child) => {
     mountSessionArtifacts(child, { hooks: { catalog }, refresh,
       confirmPlan: (id, revision) => confirm(() => child.remote.projectDashboard.confirmPlan(id, revision, lifetime.signal)),
@@ -200,15 +231,6 @@ function mountProjectPage(ctx: ClientContext): void {
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: id, locale: NS,
     inject: () => ({ hooks: { catalog }, refresh,
-      openModelSettings: () => {
-        try {
-          if (!openSettings) { ctx.contextMenus.notify(t('roster.settings-unavailable')); return }
-          openSettings()
-        }
-        catch (_error) { ctx.contextMenus.notify(t('roster.settings-unavailable')) }
-      },
-      saveEmployee: (input: EmployeeSaveInput) => save(() => ctx.remote.projectRoster.saveEmployee(input, lifetime.signal)),
-      saveTeam: (input: TeamSaveInput) => save(() => ctx.remote.projectRoster.saveTeam(input, lifetime.signal)),
       confirmPlan: (id: string, revision: number) => confirm(() => ctx.remote.projectDashboard.confirmPlan(id, revision, lifetime.signal)),
       approveAcceptance: (id: string, checkpoint: number) => confirm(() =>
         ctx.remote.projectDashboard.confirmAcceptance(id, checkpoint, lifetime.signal)),
@@ -222,6 +244,7 @@ function mountProjectPage(ctx: ClientContext): void {
       openWorker: (parent: string, child: string) => {
         ctx.uiWorkspace.openSession({ parentSessionId: parent as SessionId, childSessionId: child as SessionId, mode: 'continuable' })
       },
+      openRoster: () => { ctx.layout.selectPanel(rosterPanelId) },
       adoptPlan: (id: string, revision: number) => {
         ctx.uiWorkspace.startSession(undefined, {
           prompt: `${t('plan.adoptPrompt')}\n${JSON.stringify({ id, expectedRevision: revision })}`, whenDraftExists: 'append',
@@ -234,16 +257,33 @@ function mountProjectPage(ctx: ClientContext): void {
       runPlan: (id: string, revision: number) => {
         planPrompt(id, revision, `${t('plan.runPrompt')}\n${JSON.stringify({ planId: id, planRevision: revision })}`)
       },
-      configureEmployee: () => { ctx.uiWorkspace.startSession(undefined, { prompt: t('roster.employeePrompt'), whenDraftExists: 'append' }) },
-      configureTeam: () => { ctx.uiWorkspace.startSession(undefined, { prompt: t('roster.teamPrompt'), whenDraftExists: 'append' }) },
-      delegateTeam: (id: string) => {
-        ctx.uiWorkspace.startSession(undefined, { prompt: `${t('roster.delegatePrompt')}\nteamId=${JSON.stringify(id)}`, whenDraftExists: 'append' })
+      newProject: (request?: { name: string; instructions?: string | undefined }) => {
+        const name = request?.name.trim()
+        const instructions = request?.instructions?.trim()
+        const header = [
+          name === undefined || name === '' ? '' : t('project.new-prompt-name', { name }),
+          instructions === undefined || instructions === '' ? '' : `${t('project.new-prompt-instructions')}${instructions}`,
+        ].filter(Boolean).join('\n')
+        ctx.uiWorkspace.startSession(undefined, {
+          prompt: header === '' ? t('plan.preparePrompt') : `${header}\n${t('plan.preparePrompt')}`,
+          whenDraftExists: 'append',
+        })
       },
-      newProject: () => { ctx.uiWorkspace.startSession(undefined, { prompt: t('plan.preparePrompt'), whenDraftExists: 'append' }) },
+      readArtifact: async (sessionId: string, path: string) => {
+        const result = await ctx.remote.projectDashboard.readProjectArtifact(sessionId, path, lifetime.signal)
+        if (!result.ok) throw new Error(t('project.file-read-failed'))
+        return result.value
+      },
     }),
   }, ProjectPage))
+  ctx.slots.inject('main', () => ctx.slots.register({
+    name: 'main', key: rosterPanelId, locale: NS, inject: () => rosterActions,
+  }, RosterPanel))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist', id, order: 19, locale: NS, label: () => t('project.title'),
+  }, MeetingPanelIcon))
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+    name: 'sidebar.panellist', id: rosterPanelId, order: 20, locale: NS, label: () => t('roster.title'),
   }, MeetingPanelIcon))
   refresh()
 }

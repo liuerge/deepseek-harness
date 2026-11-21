@@ -34,11 +34,11 @@ it.each([0, 1])('keeps both review generations and routes only authorized repair
   const continueProject = vi.fn()
   const openWorker = vi.fn()
   const noop = vi.fn()
-  render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+  render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, openRoster: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject, openMain: noop, openWorker, adoptPlan: noop } as Parameters<typeof ProjectPage>[0]} />)
+  fireEvent.click(screen.getByText('Repair delivery'))
   fireEvent.click(screen.getByRole('button', { name: zh['board.task-detail'] }))
   expect(screen.getByText('Initial failure')).toBeTruthy()
   expect(screen.getByText('Repair needs another check')).toBeTruthy()
@@ -62,12 +62,12 @@ it.each(['running', 'awaiting-direction'])('shows the Team task association and 
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   const noop = vi.fn()
   render(<ProjectPage {...{
-    useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+    useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, openRoster: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan: noop,
   } as Parameters<typeof ProjectPage>[0]} />)
+  fireEvent.click(screen.getByText('Team project'))
   expect(screen.getByText(zh['project.team-disabled'])).toBeTruthy()
   expect(screen.getByText('Team 共享任务 task-3 · 执行中')).toBeTruthy()
   if (state === 'awaiting-direction') {
@@ -111,8 +111,7 @@ it('offers an explicit handoff for legacy plans rather than enabling actions wit
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   const adoptPlan = vi.fn()
   const noop = vi.fn()
-  render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+  render(<ProjectPage {...{ useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, openRoster: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan } as Parameters<typeof ProjectPage>[0]} />)
@@ -151,12 +150,12 @@ it('opens the board in a viewport dialog and returns to the inline board', () =>
   const useCatalog = <S,>(select: (value: typeof catalog) => S): S => select(catalog)
   const noop = vi.fn()
   render(<ProjectPage {...{
-    useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, configureEmployee: noop,
-    configureTeam: noop, saveEmployee: async () => true, saveTeam: async () => true, delegateTeam: noop,
+    useCatalog, t: makeTranslate(zh), refresh: noop, newProject: noop, openRoster: noop,
     preparePlan: noop, confirmPlan: noop, runPlan: noop, editPlan: noop,
     useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     approveAcceptance: noop, continueProject: noop, openMain: noop, openWorker: noop, adoptPlan: noop,
   } as Parameters<typeof ProjectPage>[0]} />)
+  fireEvent.click(screen.getByText('Board project'))
   expect(screen.queryByRole('dialog')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: zh['board.fullscreen'] }))
   const dialog = screen.getByRole('dialog', { name: zh['board.title'] })

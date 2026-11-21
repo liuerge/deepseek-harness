@@ -15,8 +15,13 @@ const employeeInput = z.object({
   id: text.optional(), expectedRevision: revision, name: text, responsibility: text,
   provider: text, model: text, reasoningEffort: text.optional(),
   fallbacks: z.array(z.object({ provider: text, model: text })).default([]), preset: text.optional(),
+  description: text.optional(),
 })
-const teamInput = z.object({ id: text.optional(), expectedRevision: revision, name: text, memberIds: z.array(text).min(1) })
+const teamInput = z.object({
+  id: text.optional(), expectedRevision: revision, name: text, memberIds: z.array(text).min(1),
+  description: text.optional(), collaborationInstructions: text.optional(),
+  ownerEmployeeId: text.optional(), allowAssignment: z.boolean().optional(),
+})
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -106,6 +111,7 @@ export default class ProjectRoster extends TypertRemoteService {
       ...(fields.reasoningEffort === undefined ? {} : { reasoningEffort: fields.reasoningEffort }),
       ...(fields.fallbacks.length === 0 ? {} : { fallbacks: fields.fallbacks }),
       ...(fields.preset === undefined ? {} : { preset: fields.preset }),
+      ...(fields.description === undefined ? {} : { description: fields.description }),
     }, fields.expectedRevision))
   }
 
@@ -124,9 +130,17 @@ export default class ProjectRoster extends TypertRemoteService {
     }
     const fields = parsed.data
     this.assertRevision(fields.id, fields.expectedRevision)
+    if (fields.ownerEmployeeId !== undefined && !fields.memberIds.includes(fields.ownerEmployeeId)) {
+      throw new HarnessError('The owner must be one of the selected members.', 'PROJECT_ROSTER_INPUT')
+    }
+    const memberIds = fields.memberIds.map(id => brandString<EmployeeId>(id))
     return Promise.resolve(this.store.saveTeam({
       id: brandString<ProjectTeamId>(fields.id ?? randomUUID()), revision: fields.expectedRevision + 1,
-      name: fields.name, memberIds: fields.memberIds.map(id => brandString<EmployeeId>(id)),
+      name: fields.name, memberIds,
+      ...(fields.description === undefined ? {} : { description: fields.description }),
+      ...(fields.collaborationInstructions === undefined ? {} : { collaborationInstructions: fields.collaborationInstructions }),
+      ...(fields.ownerEmployeeId === undefined ? {} : { ownerEmployeeId: brandString<EmployeeId>(fields.ownerEmployeeId) }),
+      ...(fields.allowAssignment === undefined ? {} : { allowAssignment: fields.allowAssignment }),
     }, fields.expectedRevision))
   }
 

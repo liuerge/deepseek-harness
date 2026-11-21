@@ -7,6 +7,7 @@ import { expect, it, vi } from 'vitest'
 import * as browserPlugin from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
 import type { ProjectInjected } from '../src/client/ProjectPage.tsx'
+import type { RosterInjected } from '../src/client/RosterPanel.tsx'
 import type { SessionMeetingsInjected } from '../src/client/SessionMeetings.tsx'
 import type { MenuContribution } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -87,7 +88,10 @@ it('contributes session meeting actions and routes project corrections and conti
     const projectEntry = runtime.slots.entries('main').find(entry => entry.options.key === 'project-workspace')
     const project = projectEntry?.inject?.() as (Record<string, unknown> & ProjectInjected) | undefined
     if (!project) throw new Error('Expected project injection')
-    project.openModelSettings()
+    const rosterEntry = runtime.slots.entries('main').find(entry => entry.options.key === 'project-roster')
+    const roster = rosterEntry?.inject?.() as (Record<string, unknown> & RosterInjected) | undefined
+    if (!roster) throw new Error('Expected roster injection')
+    roster.openModelSettings()
     expect(openSettings).toHaveBeenLastCalledWith('models')
     await vi.waitFor(() => { expect(project.hooks.catalog.getSnapshot().loading).toBe(false) })
     expect(project.hooks.catalog.getSnapshot().failed).toBe(false)
@@ -140,7 +144,9 @@ it('contributes session meeting actions and routes project corrections and conti
     expect(meetingFace.hooks.meetings.getSnapshot().sessionId).toBe('main-b')
     expect(meetingFace.hooks.meetings.getSnapshot().meetings[0]?.requirement).toBe('main-b')
     project.adoptPlan('legacy-plan', 1)
-    expect(runtime.slots.entries('sidebar.panellist')).toHaveLength(1)
+    const panels = runtime.slots.entries('sidebar.panellist')
+    expect(panels).toHaveLength(2)
+    expect(panels.map(entry => entry.options.id)).toEqual(['project-workspace', 'project-roster'])
   } finally { await handle.dispose(); await runtime.dispose() }
   expect(menus).toHaveLength(0)
 })

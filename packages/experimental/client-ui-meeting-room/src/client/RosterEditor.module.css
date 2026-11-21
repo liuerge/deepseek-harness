@@ -26,4 +26,22 @@
 .chainNode { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .chainArrow { color: var(--dsw-alias-label-tertiary); }
 .chainModel { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 8px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-1); }
+/* Team cards reuse the board/plan-card material; the head toggles the member body. */
+.list .teamCard { display: block; margin-block: 8px; padding: 12px 16px; border: 0; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-3); box-shadow: var(--dsw-elevation-panel); }
+.teamHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.teamName { min-width: 0; overflow-wrap: anywhere; }
+.teamToggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; background: none; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+@media (hover: hover) { .teamToggle:hover { color: var(--dsw-alias-label-secondary); } }
+.teamChevron { width: 14px; height: 14px; transition: transform 100ms ease; }
+.teamToggle[aria-expanded='false'] .teamChevron { transform: rotate(-90deg); }
+.teamCount { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.ownerChip { flex: none; padding: 1px 8px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.teamNote { overflow-wrap: anywhere; }
+.switchField { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.teamBody { display: grid; gap: 8px; margin-top: 4px; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l4); }
+.memberRow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.memberInfo { min-width: 0; overflow-wrap: anywhere; }
+.memberInfo p { margin: 2px 0 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.employeeHead { display: flex; align-items: center; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .teamChevron { transition: none; } }
 @media (pointer: coarse) { .form input, .form select, .form textarea { font-size: 16px; } }

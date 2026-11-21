@@ -48,6 +48,8 @@ export interface EmployeeSaveInput {
   fallbacks?: { provider: string; model: string }[] | undefined
   /** Optional registered DSH capability composition. */
   preset?: string | undefined
+  /** Optional short description shown where the employee is introduced, distinct from the task instruction. */
+  description?: string | undefined
 }
 
 /** Team template fields reviewed in the editor; membership references existing employees. */
@@ -60,6 +62,14 @@ export interface TeamSaveInput {
   name: string
   /** Distinct existing employee ids. */
   memberIds: EmployeeId[]
+  /** Optional short description shown at team-selection sites. */
+  description?: string | undefined
+  /** Optional shared instructions on ordering, priorities and acceptance ownership for the whole team. */
+  collaborationInstructions?: string | undefined
+  /** Optional leading member who takes tasks directly and coordinates the others; must already be a member. */
+  ownerEmployeeId?: EmployeeId | undefined
+  /** Whether the team may be assigned work; absence keeps the allow-by-default behavior. */
+  allowAssignment?: boolean | undefined
 }
 
 /** Active model route and advisory catalog; credentials are not included or certified. */
@@ -94,6 +104,8 @@ export interface Employee {
   fallbacks?: { provider: string; model: string }[] | undefined
   /** Registered DSH preset selecting persona, tools and skills. */
   preset?: string | undefined
+  /** Short description shown where the employee is introduced; never sent as a task instruction. */
+  description?: string | undefined
 }
 
 /** Reusable roster membership, resolved to employee revisions at execution start. */
@@ -106,6 +118,14 @@ export interface ProjectTeam {
   name: string
   /** Distinct saved employees eligible for tasks assigned to this team. */
   memberIds: EmployeeId[]
+  /** Short description shown at team-selection sites. */
+  description?: string | undefined
+  /** Shared instructions on ordering, priorities and acceptance ownership for the whole team. */
+  collaborationInstructions?: string | undefined
+  /** Leading member who takes tasks directly and coordinates the others; always a member when present. */
+  ownerEmployeeId?: EmployeeId | undefined
+  /** Whether the team may be assigned work; absence keeps the allow-by-default behavior. */
+  allowAssignment?: boolean | undefined
 }
 
 /** Stable identity of a versioned project plan. */

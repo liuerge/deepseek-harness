@@ -1,0 +1,7 @@
+/* Initial avatars: each tone mixes one hue over the theme background, so light and dark stay readable without image assets. */
+.avatar { --av-hue: 220; width: 24px; height: 24px; border-radius: 50%; corner-shape: round; display: inline-flex; align-items: center; justify-content: center; flex: none; font-size: 12px; font-weight: 500; background: color-mix(in srgb, hsl(var(--av-hue) 60% 50%) 20%, var(--dsw-alias-bg-layer-1)); color: color-mix(in srgb, hsl(var(--av-hue) 60% 45%) 50%, var(--dsw-alias-label-primary)); }
+.avatar[data-tone='1'] { --av-hue: 170; }
+.avatar[data-tone='2'] { --av-hue: 120; }
+.avatar[data-tone='3'] { --av-hue: 45; }
+.avatar[data-tone='4'] { --av-hue: 20; }
+.avatar[data-tone='5'] { --av-hue: 280; }

@@ -10,6 +10,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MeetingStore } from './store.ts'
+import { seedPresetRoster } from './preset-roster.ts'
 import { resolveEmployeeRoute } from './employee-route.ts'
 import { registerProjectTools } from './project-tools.ts'
 import ProjectDashboard from './dashboard.ts'
@@ -108,7 +109,7 @@ const meetingRequest = z.object({
 
 /** Owns meeting rounds, project execution tools and their checkpoint database. */
 export default class MeetingRoom extends Service {
-  static inject = ['agents', 'subagents', 'tools', 'workingDirectory', 'fs', 'systemPrompt']
+  static inject = ['agents', 'llm', 'subagents', 'tools', 'workingDirectory', 'fs', 'systemPrompt']
   static Config = Config
 
   /** @param ctx - Owning plugin context. @param config - Validated meeting defaults. */
@@ -130,6 +131,28 @@ export default class MeetingRoom extends Service {
     ctx.plugin(ProjectDashboard, { store: this.store, acceptanceMaxBytes: config.acceptanceMaxBytes })
     ctx.plugin(ProjectRoster, { store: this.store, modelCatalogTimeoutMs: config.modelCatalogTimeoutMs })
     ctx.plugin(ProjectTeamContext, { store: this.store })
+    // Seed the preset roster once the Host exposes a model route, so a fresh install ships usable teams.
+    ctx.effect(() => {
+      void (async () => {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const providers = this.ctx.llm.listProviders()
+          const provider = providers[0]
+          if (provider === undefined) {
+            await new Promise((resolve) => { setTimeout(resolve, 2000) })
+            continue
+          }
+          const models = await this.ctx.llm.listModels(provider.id).catch(() => [])
+          const model = models[0]
+          if (model === undefined) {
+            await new Promise((resolve) => { setTimeout(resolve, 2000) })
+            continue
+          }
+          seedPresetRoster(this.store, { provider: provider.id, model: model.id })
+          return
+        }
+      })().catch(() => { /* 预置种子尽力而为：失败时用户仍可手动创建团队 */ })
+      return async () => { /* 种子随服务生命周期终止 */ }
+    })
     this.ctx.tools.register(defineTool({
       name: 'meeting_start',
       description: 'Run an independent discussion from the main conversation. Participant children appear in its existing subagent catalog. Returns meeting identity and opinions, not an approved requirement. Use meeting_record_decision to retain the main assistant conclusion and follow-up actions.',

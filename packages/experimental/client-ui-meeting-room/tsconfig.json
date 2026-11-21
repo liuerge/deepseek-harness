@@ -12,6 +12,9 @@
       "path": "../../client/ui-renderer"
     },
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

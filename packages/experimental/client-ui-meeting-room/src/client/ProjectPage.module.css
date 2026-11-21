@@ -13,7 +13,7 @@
 .planCardHead h3 { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 15px; line-height: 22px; }
 .planIndex { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; }
 /* Status line groups version/team/verdict/start/doc that were previously scattered across three places. */
-.planMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 14px; color: var(--dsw-alias-label-secondary); }
+.planMetaBox { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 14px; padding: 10px 14px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); }
 .planEmployees { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .planEmployees li { flex: 1 1 220px; min-width: 0; padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); }
 .planEmployeeHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -34,6 +34,11 @@
 .empty { margin: auto; max-width: 480px; text-align: center; }
 .empty h2 { font-size: 16px; font-weight: 500; }
 .project details { margin: 12px 0; }
+/* Background sources: two-level disclosure so the plan card stays scannable. */
+.backgroundItem { border-top: 0.5px solid var(--dsw-alias-border-l4); }
+.backgroundItem summary { padding: 8px 0; font-weight: 500; cursor: pointer; }
+.backgroundItem p { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.backgroundItem pre { margin: 8px 0 0; }
 .project pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 12px 0; }
 .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 16px 20px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-card-fill); }
 .summaryGoal { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
@@ -42,7 +47,14 @@
 .pending h2 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
 .pendingItem { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .pendingItem:last-child { border-bottom: none; }
-.board { display: flex; flex-direction: column; gap: 12px; }
+.board { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-card-fill); }
+/* Project switcher: one board at a time, so N team tasks stay bounded on the page. */
+.projectTabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.projectTab { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 6px 12px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; corner-shape: round; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+@media (hover: hover) { .projectTab:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); } }
+.projectTab[data-active] { border-color: var(--dsw-alias-border-selected); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font-weight: 500; }
+.projectTabState { flex: none; color: var(--dsw-alias-label-tertiary); }
+.projectTabLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .boardHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
 .boardHeader h2 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .boardFullscreen { flex: 1; min-height: 0; overflow-y: auto; }
@@ -62,6 +74,75 @@
 @media (max-width: 1240px) { .columns { grid-template-columns: repeat(5, minmax(140px, 1fr)); } }
 .count { min-width: 20px; margin-left: auto; padding: 0 7px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 999px; corner-shape: round; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); text-align: center; font-size: 12px; font-weight: 500; }
 .emptyColumn { margin: 0; padding: 16px 8px; border: 1px dashed var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-tertiary); text-align: center; font-size: 12px; }
+/* List view: the same tasks grouped by execution state as compact collapsible groups. */
+.viewSwitch { flex: none; }
+.listGroups { display: flex; flex-direction: column; gap: 10px; }
+.listGroup { border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-skeleton); overflow: hidden; }
+.listGroupHead { display: flex; width: 100%; align-items: center; gap: 8px; padding: 10px 12px; border: none; background: none; color: inherit; font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.listGroupHead[data-tone='ongoing'] { background: color-mix(in srgb, var(--dsw-alias-state-business-tertiary) 55%, transparent); }
+.listGroupHead[data-tone='warning'] { background: color-mix(in srgb, var(--dsw-alias-state-warn-tertiary) 55%, transparent); }
+.listGroupHead[data-tone='done'] { background: color-mix(in srgb, var(--dsw-alias-state-success-tertiary) 55%, transparent); }
+.listGroupHead[data-tone='error'] { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
+.listChevron { width: 14px; height: 14px; flex: none; transition: transform 100ms ease; }
+.listGroupHead[aria-expanded='false'] .listChevron { transform: rotate(-90deg); }
+.listRows { display: flex; flex-direction: column; }
+.listRow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.listRow + .listRow { border-top: 0.5px solid var(--dsw-alias-border-l4); }
+.listRowMain { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.listRowMain strong { font-weight: 500; }
+.listRowRole { color: var(--dsw-alias-label-secondary); min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .listChevron { transition: none; } }
+/* Project assets: one read-only table aggregating the plan document, planned artifacts and verified versions. */
+.assets { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-skeleton); }
+.assetsHead { display: flex; align-items: center; gap: 8px; }
+.assetsHead h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.assetsTable { display: flex; flex-direction: column; }
+.assetsRow { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.assetsRow + .assetsRow { border-top: 0.5px solid var(--dsw-alias-border-l4); }
+.assetFile { flex: 1 1 auto; min-width: 0; }
+.assetSource { flex: none; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.assetKind { flex: none; margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+/* Workbench layout: single main column; project config lives in the summary bar. */
+.workbench { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.railMeta { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+@media (max-width: 1360px) { .workbench { flex-direction: column; } }
+@media (prefers-reduced-motion: reduce) { .railChevron { transition: none; } }
+/* Workbench list mode: project cards plus preset templates, per the reference hierarchy entry. */
+.projectList, .templateGrid { display: flex; flex-direction: column; gap: 12px; }
+.projectList h2, .templateGrid h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.projectCard { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-card-fill); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+@media (hover: hover) { .projectCard:hover { background: var(--dsw-alias-interactive-bg-hover); } }
+.projectCardHead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.projectCardHead strong { font-weight: 500; overflow-wrap: anywhere; }
+.projectCardMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.templateCards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.templateCard { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-card-fill); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+@media (hover: hover) { .templateCard:hover { background: var(--dsw-alias-interactive-bg-hover); } }
+.templateCard strong { font-weight: 500; overflow-wrap: anywhere; }
+.templateCard span { color: var(--dsw-alias-label-secondary); font-size: 12px; overflow-wrap: anywhere; }
+/* Project list bounds its height so many team tasks scroll instead of stretching the page. */
+.projectList .projectCard { flex: none; }
+.projectList { max-height: 560px; overflow-y: auto; padding-right: 4px; }
+/* Artifact viewer: a bounded reading pane for registered project files. */
+.fileViewerModal.fileViewerModal { width: min(760px, calc(100vw - 32px)); height: min(720px, calc(100vh - 48px)); }
+.fileViewerContent { overflow-y: auto; }
+.fileViewerPre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 18px; }
+.fileViewerActions { display: flex; gap: 8px; margin-top: 12px; }
+/* New-project dialog: the name and instructions join the prepared session prompt, no new storage. */
+.newProjectModal.newProjectModal { width: min(480px, calc(100vw - 32px)); height: min(600px, calc(100vh - 48px)); }
+.newProjectModalContent { overflow-y: auto; }
+/* Anchored targets scroll clear of the fixed app header and flash their border as a focus cue. */
+.planCard, .assets { scroll-margin-top: 88px; }
+.focusFlash { animation: focusPulse 1.8s ease; }
+@keyframes focusPulse {
+  0%, 100% { box-shadow: var(--dsw-elevation-panel); }
+  40% { border-color: var(--dsw-alias-border-selected); box-shadow: 0 0 0 3px var(--dsw-alias-border-selected), var(--dsw-elevation-panel); }
+}
+@media (prefers-reduced-motion: reduce) { .focusFlash { animation: none; outline: 2px solid var(--dsw-alias-border-selected); outline-offset: 2px; } }
+.newProjectForm { display: grid; gap: 16px; padding: 0 24px; }
+.newProjectForm label { display: grid; gap: 8px; }
+.newProjectForm textarea { box-sizing: border-box; width: 100%; min-height: 96px; resize: vertical; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 8px; padding: 8px 12px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; }
 /* bg-layer-3 is the lightest surface rung, so the card floats above the column fill in the dark palette too. */
 .card { display: grid; gap: 8px; padding: 12px; border: 0; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-3); box-shadow: var(--dsw-elevation-panel); }
 .cardHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }

@@ -19,6 +19,7 @@ export const employeeSchema = z.object({
   reasoningEffort: z.string().trim().min(1).optional(),
   fallbacks: z.array(modelRouteSchema).optional(),
   preset: z.string().trim().min(1).optional(),
+  description: z.string().trim().min(1).optional(),
 })
 
 /** Saved team JSON validation; membership cannot be empty or duplicated. */
@@ -28,7 +29,12 @@ export const teamSchema = z.object({
   name: z.string().trim().min(1),
   memberIds: z.array(z.string().min(1).transform(id => brandString<EmployeeId>(id))).min(1)
     .refine(ids => new Set(ids).size === ids.length, 'Each employee appears once.'),
-})
+  description: z.string().trim().min(1).optional(),
+  collaborationInstructions: z.string().trim().min(1).optional(),
+  ownerEmployeeId: z.string().min(1).transform(id => brandString<EmployeeId>(id)).optional(),
+  allowAssignment: z.boolean().optional(),
+}).refine(team => team.ownerEmployeeId === undefined || team.memberIds.includes(team.ownerEmployeeId),
+  'The owner must be one of the team members.')
 
 /** Durable conversation planning defaults, including an explicit cleared preference. */
 export const sessionTeamSelectionSchema = z.object({

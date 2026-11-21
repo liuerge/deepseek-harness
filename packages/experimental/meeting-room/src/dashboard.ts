@@ -8,15 +8,52 @@ import type {
 } from './types.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { verifyAcceptanceArtifacts } from './acceptance.ts'
+import { verifyAcceptanceArtifacts, observeArtifacts } from './acceptance.ts'
 import { verifyPlanDocument } from './plan-document.ts'
 import { executionCheckpointSchema } from './checkpoints.ts'
+import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Retained project execution timeline. */
     projectDashboard: ProjectDashboard
   }
+}
+
+/** Artifacts a workspace viewer may open for one conversation: plan documents, planned paths and verified report artifacts. */
+export interface RegisteredArtifact {
+  cwd: string | undefined
+  sha256: string | undefined
+}
+
+/**
+ * Collect the artifact paths registered for one conversation.
+ * @param plans - Retained plans; conversation-owned plan documents and their planned artifact paths register first.
+ * @param timeline - Persisted checkpoint rows; acceptance reports register their verified canonical artifacts.
+ * @param sessionId - Conversation whose registered artifacts are collected.
+ * @returns Map keyed by canonical or planned path, carrying the resolution cwd and the recorded hash when known.
+ */
+export function registeredArtifacts(plans: ProjectPlan[], timeline: { sessionId: string; record: string }[],
+  sessionId: string): Map<string, RegisteredArtifact> {
+  const registered = new Map<string, RegisteredArtifact>()
+  for (const plan of plans) {
+    if (plan.originSessionId !== sessionId || !plan.document) continue
+    registered.set(plan.document.path, { cwd: plan.document.cwd, sha256: plan.document.sha256 })
+    // Planned artifact paths are relative to the plan's project root; the file may not exist until the task runs.
+    for (const task of plan.tasks) {
+      for (const artifactPath of task.review?.artifactPaths ?? []) {
+        registered.set(artifactPath, { cwd: plan.document.cwd, sha256: undefined })
+      }
+    }
+  }
+  for (const row of timeline) {
+    if (row.sessionId !== sessionId) continue
+    const parsed = executionCheckpointSchema.parse(JSON.parse(row.record))
+    for (const artifact of parsed.report?.artifacts ?? []) {
+      registered.set(artifact.path, { cwd: parsed.cwd, sha256: artifact.sha256 })
+    }
+  }
+  return registered
 }
 
 /** Project queries and user-owned plan confirmation for the authenticated Host client. */
@@ -70,6 +107,33 @@ export default class ProjectDashboard extends TypertRemoteService {
   meetings(sessionId: string, signal: AbortSignal): Promise<MeetingRecord[]> {
     signal.throwIfAborted()
     return Promise.resolve(this.store.meetingsForSession(sessionId))
+  }
+
+  /**
+   * Read one registered project artifact as decoded text for the workspace viewer.
+   * @param sessionId - Owning conversation whose plans and acceptance reports registered the artifact.
+   * @param path - Canonical artifact path exactly as recorded by the plan document or an acceptance report.
+   * @param signal - Read cancellation.
+   * @returns Decoded text capped by the artifact-read policy, with the observed hash when the file still matches the accepted version.
+   */
+  @Remote
+  async readProjectArtifact(sessionId: string, path: string, signal: AbortSignal):
+  Promise<{ path: string; sha256?: string; content: string }> {
+    signal.throwIfAborted()
+    const registered = registeredArtifacts(this.store.plans(), this.store.projectTimeline(), sessionId)
+    const known = registered.get(path)
+    if (known === undefined) {
+      throw new HarnessError('只有本会话计划文档或验收报告登记过的产物文件才能在这里打开。', 'PROJECT_ARTIFACT_NOT_REGISTERED')
+    }
+    if (known.cwd === undefined) throw new HarnessError('该产物没有记录执行目录，无法读取。', 'PROJECT_ARTIFACT_NOT_REGISTERED')
+    const [observed] = await observeArtifacts(this.ctx, [path], known.cwd, this.options.acceptanceMaxBytes, signal)
+    if (observed === undefined) throw new HarnessError('产物文件当前不可读取。', 'PROJECT_ARTIFACT_NOT_REGISTERED')
+    const fs = this.ctx.get('fs')
+    if (!fs) throw new ToolContextUnavailableError('Reading artifacts requires the configured filesystem service.')
+    const target = await fs.resolve(path, { cwd: known.cwd, signal })
+    const content = await fs.readText(target, signal)
+    signal.throwIfAborted()
+    return { path: observed.path, sha256: observed.sha256, content }
   }
 
   /**
