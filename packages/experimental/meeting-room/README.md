@@ -3,7 +3,7 @@ description: "Main-conversation meetings with isolated participant Sessions and 
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-meeting-room
+# @deepseek-ai/dsh-experimental-meeting-room
 
 English | [中文](README.zh.md)
 
@@ -29,7 +29,7 @@ Mount the plugin with a subagent provider and the route the meeting Session and 
 
 ```yaml
 - id: meeting-room
-  name: '@deepseek-ai/dsh-meeting-room'
+  name: '@deepseek-ai/dsh-experimental-meeting-room'
   config:
     provider: spawn
     agentOptions:

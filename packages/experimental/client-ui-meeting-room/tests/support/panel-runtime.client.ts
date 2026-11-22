@@ -9,7 +9,7 @@ import type { ProjectInjected } from '../../src/client/ProjectPage.tsx'
 import type { RosterInjected } from '../../src/client/RosterPanel.tsx'
 import type { SessionMeetingsInjected } from '../../src/client/SessionMeetings.tsx'
 import type { MenuContribution } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import type { RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
+import type { RosterConnection } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 
 /** Overridable remote handlers and services for one mounted panel runtime. */
 export interface PanelOptions {
@@ -23,7 +23,6 @@ export interface PanelOptions {
   saveEmployee?: Mock
   saveTeam?: Mock
   initialize?: Mock
-  settingsNavigation?: { open: (page: string) => void }
 }
 
 /** One mounted panel runtime with its project, roster and meeting injections. */
@@ -56,7 +55,6 @@ export async function mountPanel(options: PanelOptions = {}): Promise<MountedPan
   runtime.ctx.provide('conversation', { input: { requestDraftInitialization: initialize } } as never)
   runtime.ctx.provide('layout', { selectPanel } as never)
   runtime.ctx.provide('uiConversation', { views: { register: vi.fn() } } as never)
-  if (options.settingsNavigation) runtime.ctx.provide('settingsNavigation', options.settingsNavigation)
   const menus: MenuContribution<'sessionHeader'>[] = []
   runtime.ctx.provide('contextMenus', { notify, register: (menu: MenuContribution<'sessionHeader'>) => {
     menus.push(menu)
@@ -87,9 +85,14 @@ export async function mountPanel(options: PanelOptions = {}): Promise<MountedPan
       confirmPlan: options.confirmPlan ?? vi.fn(async () => ({ ok: true as const, value: {} })),
       confirmAcceptance: vi.fn(async () => ({ ok: true as const, value: { projectId: 'run-1' } })),
       readProjectArtifact: options.readProjectArtifact ?? vi.fn(async () => ({ ok: true as const, value: { path: 'p', content: 'text' } })),
+      resolveProjectArtifact: vi.fn(async () => ({ ok: true as const, value: { path: 'p' } })),
+      stopExecution: vi.fn(async () => ({ ok: true as const, value: { cancelled: true } })),
     },
     projectTeamContext: { current: vi.fn(async () => ({ ok: true as const, value: { revision: 0, team: null, employees: [] } })) },
     agentTeams: { setEnabled: vi.fn(async () => ({ ok: true as const, value: undefined })) },
+    session: {
+      openWorkspacePath: vi.fn(async () => ({ ok: true as const, value: { opened: true } })),
+    },
   })
   vi.spyOn(runtime.ctx.remote, '$mount').mockResolvedValue(async () => {})
   await runtime.declare({
@@ -98,8 +101,8 @@ export async function mountPanel(options: PanelOptions = {}): Promise<MountedPan
     'conversation.session.panel.section': { kind: 'list', scope: 'session' },
     'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
     'conversation.view': { kind: 'list', scope: 'session' },
-    'conversation.hero.agentPreset.suffix': { kind: 'list', scope: 'session-maybe' },
-    'conversation.hero.agentPreset.options': { kind: 'list', scope: 'session-maybe' },
+    'conversation.hero.options': { kind: 'list', scope: 'session' },
+    'conversation.input.model.options': { kind: 'list', scope: 'session' },
     'conversation.session.header.actions': { kind: 'list', scope: 'session' },
   })
   const handle = await runtime.mount(browserPlugin)

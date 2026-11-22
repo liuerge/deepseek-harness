@@ -96,3 +96,16 @@ it('project_records inspects one execution across conversations and falls back t
       .rejects.toMatchObject({ name: 'ToolArgsError' })
   } finally { store.close() }
 })
+
+it('project_execute refuses an empty roster with a configuration hint', async () => {
+  const store = new MeetingStore(':memory:')
+  try {
+    const { ctx, tools } = fakeToolCtx()
+    registerProjectTools(ctx, store, Config.parse({}))
+    const execute = tools.get('project_execute')!
+    await expect(execute.execute({
+      goal: 'Build a page',
+      tasks: [{ role: 'Dev', instruction: 'Implement', acceptance: 'Works' }],
+    }, { agent: root })).rejects.toMatchObject({ code: 'PROJECT_ROSTER_EMPTY' })
+  } finally { store.close() }
+})

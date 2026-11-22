@@ -4,7 +4,7 @@
 import { afterEach, beforeAll, expect, it, vi, type Mock } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { Employee, ProjectPlan, ProjectTeam, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectPlan, ProjectTeam, AcceptanceReport } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { ProjectPage, type ProjectCheckpoint } from '../src/client/ProjectPage.tsx'
 import { FileChip } from '../src/client/FileChip.tsx'
 import { RosterPanel } from '../src/client/RosterPanel.tsx'
@@ -352,9 +352,9 @@ it('binds file chips to the base menu only when the target session is known', ()
   expect(screen.getByText('plain.txt').parentElement!.getAttribute('title')).toBe('plain.txt')
 })
 
-it('renders the roster panel with loading and failure feedback and forwards the settings action', () => {
+it('renders the roster panel with loading and failure feedback', () => {
   const useCatalog = <S,>(select: (value: Catalog) => S): S => select({ ...baseCatalog, loading: true, failed: true })
-  render(<RosterPanel {...{ useCatalog, t: makeTranslate(zh), openModelSettings: vi.fn(),
+  render(<RosterPanel {...{ useCatalog, t: makeTranslate(zh),
     saveEmployee: vi.fn(async () => true), saveTeam: vi.fn(async () => true), delegateTeam: vi.fn(),
   } as Parameters<typeof RosterPanel>[0]} />)
   expect(screen.getByText(zh['project.loading'])).toBeTruthy()

@@ -8,6 +8,7 @@ import type {
 } from './types.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { verifyAcceptanceArtifacts, observeArtifacts } from './acceptance.ts'
 import { verifyPlanDocument } from './plan-document.ts'
 import { executionCheckpointSchema } from './checkpoints.ts'
@@ -58,7 +59,7 @@ export function registeredArtifacts(plans: ProjectPlan[], timeline: { sessionId:
 
 /** Project queries and user-owned plan confirmation for the authenticated Host client. */
 export default class ProjectDashboard extends TypertRemoteService {
-  static inject = ['fs']
+  static inject = ['fs', 'agents']
   /** @param ctx - Owning plugin scope. @param options - Shared store and bounded artifact-read policy. */
   constructor(ctx: Context, private readonly options: { store: MeetingStore; acceptanceMaxBytes: number }) {
     super(ctx, 'projectDashboard')
@@ -134,6 +135,48 @@ export default class ProjectDashboard extends TypertRemoteService {
     const content = await fs.readText(target, signal)
     signal.throwIfAborted()
     return { path: observed.path, sha256: observed.sha256, content }
+  }
+
+  /**
+   * Resolve one registered project artifact to an absolute Host path for external open/reveal actions.
+   * The viewer cannot use the session-scoped base file menu because artifacts live under the plan's
+   * execution directory, not the conversation workspace root. This method returns the real path so the
+   * client can call the desktop file opener directly; existence and hash are still observed first.
+   * @param sessionId - Owning conversation that registered the artifact.
+   * @param path - Canonical artifact path exactly as registered.
+   * @param signal - Query cancellation.
+   * @returns Absolute Host path plus the observed hash when available.
+   */
+  @Remote
+  async resolveProjectArtifact(sessionId: string, path: string, signal: AbortSignal):
+  Promise<{ path: string; sha256?: string }> {
+    signal.throwIfAborted()
+    const registered = registeredArtifacts(this.store.plans(), this.store.projectTimeline(), sessionId)
+    const known = registered.get(path)
+    if (known === undefined) {
+      throw new HarnessError('只有本会话计划文档或验收报告登记过的产物文件才能在这里打开。', 'PROJECT_ARTIFACT_NOT_REGISTERED')
+    }
+    if (known.cwd === undefined) throw new HarnessError('该产物没有记录执行目录，无法读取。', 'PROJECT_ARTIFACT_NOT_REGISTERED')
+    const [observed] = await observeArtifacts(this.ctx, [path], known.cwd, this.options.acceptanceMaxBytes, signal)
+    if (observed === undefined) throw new HarnessError('产物文件当前不可读取。', 'PROJECT_ARTIFACT_NOT_REGISTERED')
+    return { path: observed.path, ...(observed.sha256 === undefined ? {} : { sha256: observed.sha256 }) }
+  }
+
+  /**
+   * Interrupt the current turn of the conversation that owns a running project execution.
+   * @param sessionId - Main conversation driving the project execution.
+   * @param signal - Query cancellation.
+   * @returns Whether a live agent was cancelled.
+   */
+  @Remote
+  stopExecution(sessionId: string, signal: AbortSignal): Promise<{ cancelled: boolean }> {
+    signal.throwIfAborted()
+    const agents = this.ctx.get('agents')
+    if (!agents) throw new ToolContextUnavailableError('Stopping an execution requires the configured agent service.')
+    const agent = agents.get(brandString<SessionId>(sessionId))
+    if (!agent) return Promise.resolve({ cancelled: false })
+    agent.cancel({ kind: 'user' }, { keepInbox: true })
+    return Promise.resolve({ cancelled: true })
   }
 
   /**

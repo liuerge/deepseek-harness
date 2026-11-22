@@ -11,7 +11,7 @@ import type { RosterInjected } from '../src/client/RosterPanel.tsx'
 import type { SessionMeetingsInjected } from '../src/client/SessionMeetings.tsx'
 import type { MenuContribution } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { MeetingRecord, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
+import type { MeetingRecord, RosterConnection } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import type { TeamPickerInjected } from '../src/client/TeamPicker.tsx'
 
 it('contributes session meeting actions and routes project corrections and continuation to the original main conversation', async () => {
@@ -21,8 +21,6 @@ it('contributes session meeting actions and routes project corrections and conti
   const openSession = vi.fn()
   const initialize = vi.fn<(binding: object, options: { prompt: string; whenDraftExists: string }) => 'applied'>(() => 'applied')
   const selectPanel = vi.fn()
-  const openSettings = vi.fn()
-  runtime.ctx.provide('settingsNavigation', { open: openSettings })
   runtime.ctx.provide('uiWorkspace', { startSession: vi.fn(), openSession } as never)
   runtime.ctx.provide('conversation', { input: { requestDraftInitialization: initialize } } as never)
   runtime.ctx.provide('layout', { selectPanel } as never)
@@ -65,11 +63,12 @@ it('contributes session meeting actions and routes project corrections and conti
     roster: async () => ({ ok: true, value: { employees: [], teams: [] } }), confirmPlan, confirmAcceptance, meetings,
   }, projectTeamContext: {
     current: async () => ({ ok: true, value: { revision: 0, team: null, employees: [] } }),
-  }, agentTeams: { setEnabled: vi.fn(async () => ({ ok: true, value: undefined })) } })
+  }, agentTeams: { setEnabled: vi.fn(async () => ({ ok: true, value: undefined })) },
+  session: { openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })) } })
   vi.spyOn(runtime.ctx.remote, '$mount').mockResolvedValue(async () => {})
   await runtime.declare({ main: { kind: 'keyed', scope: 'root' }, 'sidebar.panellist': { kind: 'list', scope: 'root' },
-    'conversation.hero.agentPreset.suffix': { kind: 'list', scope: 'session-maybe' },
-    'conversation.hero.agentPreset.options': { kind: 'list', scope: 'session-maybe' },
+    'conversation.hero.options': { kind: 'list', scope: 'session' },
+    'conversation.input.model.options': { kind: 'list', scope: 'session' },
   })
   const handle = await runtime.mount(browserPlugin)
   try {
@@ -79,7 +78,7 @@ it('contributes session meeting actions and routes project corrections and conti
     await checkpointDelivered.promise
     firstTimeline.resolve(timelineResult)
     await vi.waitFor(() => { expect(timeline.mock.calls.length).toBeGreaterThan(priorCalls) })
-    const pickerEntry = runtime.slots.entries('conversation.hero.agentPreset.suffix')[0]
+    const pickerEntry = runtime.slots.entries('conversation.hero.options')[0]
     const injectPicker = pickerEntry?.inject as ((sessionId: SessionId) => TeamPickerInjected) | undefined
     const picker = injectPicker?.('main-root' as SessionId)
     if (!picker) throw new Error('Expected team picker injection')
@@ -91,8 +90,6 @@ it('contributes session meeting actions and routes project corrections and conti
     const rosterEntry = runtime.slots.entries('main').find(entry => entry.options.key === 'project-roster')
     const roster = rosterEntry?.inject?.() as (Record<string, unknown> & RosterInjected) | undefined
     if (!roster) throw new Error('Expected roster injection')
-    roster.openModelSettings()
-    expect(openSettings).toHaveBeenLastCalledWith('models')
     await vi.waitFor(() => { expect(project.hooks.catalog.getSnapshot().loading).toBe(false) })
     expect(project.hooks.catalog.getSnapshot().failed).toBe(false)
     expect(project.hooks.catalog.getSnapshot().connectionsLoading).toBe(true)

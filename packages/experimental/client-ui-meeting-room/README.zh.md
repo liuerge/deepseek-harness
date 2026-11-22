@@ -3,7 +3,7 @@ description: "Web 客户端的主会话会议记录、项目进度与验收控�
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-client-ui-meeting-room
+# @deepseek-ai/dsh-experimental-client-ui-meeting-room
 
 [English](README.md) | 中文
 

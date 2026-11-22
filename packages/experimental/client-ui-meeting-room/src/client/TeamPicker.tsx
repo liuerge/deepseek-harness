@@ -1,9 +1,10 @@
 /** Team planning defaults as a conversation-scoped composer control. */
 import { useEffect, useState } from 'react'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ProjectTeam } from '@deepseek-ai/dsh-meeting-room/types'
+import type { ProjectTeam } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconRefreshOutlineRegular, MenuItemButton, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-agent-team/client'
 import type { TeamPickerState } from './team-picker.ts'
 import type { NS } from './locales.ts'
@@ -19,9 +20,9 @@ export interface TeamPickerInjected {
   configure: () => void
 }
 
-type LabelProps = PropsRuntime<'conversation.hero.agentPreset.suffix'>
+type LabelProps = PropsRuntime<'conversation.hero.options'>
   & PropsLocale<typeof NS> & InjectFace<TeamPickerInjected>
-type OptionProps = PropsRuntime<'conversation.hero.agentPreset.options'>
+type OptionProps = PropsRuntime<'conversation.input.model.options'>
   & PropsLocale<typeof NS> & InjectFace<TeamPickerInjected>
 
 /**
@@ -29,12 +30,12 @@ type OptionProps = PropsRuntime<'conversation.hero.agentPreset.options'>
  * @param props - Parent menu dismissal, exact conversation, live selection and localized actions.
  * @returns One component-owned menu row with the current team reflected.
  */
-export function TeamPickerOption({ sessionId, useSessions, open, closeMenu, t }: OptionProps) {
+export function TeamPickerOption({ sessionId, useSessions, open, dismiss, t }: OptionProps) {
   const child = useSessions(value => sessionId !== undefined && value.byId[sessionId]?.origin === 'subagent')
   if (child) return null
   return <MenuItemButton separatorBefore disabled={sessionId === undefined}
     disabledReason={sessionId === undefined ? t('team-mode.workspace') : undefined}
-    onSelect={() => { closeMenu(); open() }}>
+    onSelect={() => { dismiss(); open() }}>
     <span className={css.option}>
       <span className={css.optionName}>{t('team-mode.title')}</span>
       <span className={css.optionDesc}>{t('team-mode.optionDescription')}</span>

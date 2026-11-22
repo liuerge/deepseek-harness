@@ -5,33 +5,33 @@
 /:
   en: 56b41478eca81c9a
   zh: d3ed48571315d25a
-/deepseek-ai-dsh-meeting-room-bundle:
-  en: cc034d174f02bcd5
-  zh: c40210d93de721ea
-/deepseek-ai-dsh-meeting-room-bundle/summary:
+/deepseek-ai-dsh-experimental-meeting-room-bundle:
+  en: 01bac058522075a1
+  zh: 814b3ae414170d7e
+/deepseek-ai-dsh-experimental-meeting-room-bundle/summary:
   en: 476647d388a028a3
   zh: 0209cbfd52083afb
-/deepseek-ai-dsh-meeting-room-bundle/table-of-contents:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/table-of-contents:
   en: d152484eb41ac6b4
   zh: f0f7f88fe2f53b05
-/deepseek-ai-dsh-meeting-room-bundle/use-this-package:
-  en: 650b711173bcdac5
-  zh: 32529bf4ffefab52
-/deepseek-ai-dsh-meeting-room-bundle/understand-the-implementation:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/use-this-package:
+  en: f93ae4c767fc12ea
+  zh: ef436a6c614a71fc
+/deepseek-ai-dsh-experimental-meeting-room-bundle/understand-the-implementation:
   en: 616b1202c5a60999
   zh: 71a03eb9e3e9f839
-/deepseek-ai-dsh-meeting-room-bundle/further-exploration:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/further-exploration:
   en: 5920406b6f917696
   zh: d93cf6bdb4be441a
-/deepseek-ai-dsh-meeting-room-bundle/model-experience:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/model-experience:
   en: f683e190ef839497
   zh: 9d72e92015ecc18f
-/deepseek-ai-dsh-meeting-room-bundle/model-experience/kv-cache-effect:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/model-experience/kv-cache-effect:
   en: 5e69b673a8143d88
   zh: 2d78e5eea2378f6d
-/deepseek-ai-dsh-meeting-room-bundle/known-limitations-and-deferred-work:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/known-limitations-and-deferred-work:
   en: 508340ced0454ea6
   zh: 81baa1482e23d685
-/deepseek-ai-dsh-meeting-room-bundle/known-limitations-and-deferred-work/dev-note:
+/deepseek-ai-dsh-experimental-meeting-room-bundle/known-limitations-and-deferred-work/dev-note:
   en: 4332677e12e0c8e0
   zh: 399f0c9ddb8e9c22

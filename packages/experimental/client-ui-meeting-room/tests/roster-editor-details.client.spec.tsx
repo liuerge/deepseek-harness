@@ -4,7 +4,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { Employee, ProjectTeam } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectTeam } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { RosterEditor } from '../src/client/RosterEditor.tsx'
 import { zh } from '../src/client/locales.ts'
 

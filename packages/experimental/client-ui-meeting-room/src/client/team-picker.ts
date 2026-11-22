@@ -1,7 +1,7 @@
 /** Conversation-bound team preferences and explicit shared-board activation. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { Employee, ProjectTeam, SessionTeamSelection } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectTeam, SessionTeamSelection } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-agent-team/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -146,11 +146,13 @@ export function mountTeamPicker(ctx: Context): void {
   ctx.effect(() => async () => {
     await Promise.all([...controllers.values()].map(controller => controller.dispose())); controllers.clear()
   })
-  ctx.slots.inject('conversation.hero.agentPreset.suffix', () => ctx.slots.register({
-    name: 'conversation.hero.agentPreset.suffix', id: 'project-team', locale: NS, inject: forSession,
+  // Official base slots only: the compact options row beside the preset control, and the
+  // model menu row that opens the picker. No base modification is required.
+  ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
+    name: 'conversation.hero.options', id: 'project-team', locale: NS, inject: forSession,
   }, TeamPickerLabel))
-  ctx.slots.inject('conversation.hero.agentPreset.options', () => ctx.slots.register({
-    name: 'conversation.hero.agentPreset.options', id: 'project-team', locale: NS, inject: forSession,
+  ctx.slots.inject('conversation.input.model.options', () => ctx.slots.register({
+    name: 'conversation.input.model.options', id: 'project-team', locale: NS, inject: forSession,
   }, TeamPickerOption))
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions', id: 'project-team', locale: NS, inject: forSession, order: -9,

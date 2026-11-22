@@ -1,8 +1,8 @@
 /** Direct employee model routing and reusable team membership editors. */
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { Button, IconChevronDownOutlineRegular, Input, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { Employee, EmployeeId, ProjectTeam, EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, EmployeeId, ProjectTeam, EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import type { MeetingRoomKey } from './locales.ts'
 import css from './RosterEditor.module.css'
 import { RosterAvatar } from './RosterAvatar.tsx'
@@ -45,6 +45,13 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
   const [error, setError] = useState<'employee' | 'team' | undefined>()
   const [collapsedTeams, setCollapsedTeams] = useState<ReadonlySet<string>>(new Set())
   const modelList = useId()
+  const formRef = useRef<HTMLFormElement | null>(null)
+  // The editor forms live above the saved lists; opening one from a list row scrolls it into view so the click has a visible response.
+  useEffect(() => {
+    if ((employee !== undefined || team !== undefined) && typeof formRef.current?.scrollIntoView === 'function') {
+      formRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [employee, team])
   const connection = connections.find(item => item.id === employee?.provider)
   const selectedModel = connection?.models.find(item => item.id === employee?.model)
   const efforts = selectedModel?.efforts ?? []
@@ -102,7 +109,7 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
     <p className={css.hint}>{t('roster.route-hint')}</p>
     {connectionsLoading && <p role="status">{t('roster.connections-loading')}</p>}
     {connectionsFailed && <p role="alert">{t('roster.catalog-failed')}</p>}
-    {employee && <form className={css.form} onSubmit={(event) => { event.preventDefault(); void save('employee') }}>
+    {employee && <form ref={formRef} className={css.form} onSubmit={(event) => { event.preventDefault(); void save('employee') }}>
       <h3>{t(employee.id === undefined ? 'roster.employee' : 'roster.edit-employee')}</h3>
       <label>{t('roster.name')}<Input required value={employee.name} disabled={!!pending}
         onChange={(event) => { setEmployee({ ...employee, name: event.target.value }) }} /></label>
@@ -149,7 +156,7 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
         <Button disabled={!!pending} onClick={() => { setEmployee(undefined) }}>{t('roster.cancel')}</Button>
       </div>
     </form>}
-    {team && <form className={css.form} onSubmit={(event) => { event.preventDefault(); void save('team') }}>
+    {team && <form ref={formRef} className={css.form} onSubmit={(event) => { event.preventDefault(); void save('team') }}>
       <h3>{t(team.id === undefined ? 'roster.team' : 'roster.edit-team')}</h3>
       <label>{t('roster.name')}<Input required value={team.name} disabled={!!pending}
         onChange={(event) => { setTeam({ ...team, name: event.target.value }) }} /></label>

@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-meeting-room",
+  "name": "@deepseek-ai/dsh-experimental-meeting-room",
   "description": "Meeting orchestration over DSH sessions: one root session per meeting, one spawn subagent per role round",
   "version": "0.2.2-rc.5",
   "publishConfig": {

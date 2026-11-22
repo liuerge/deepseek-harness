@@ -5,11 +5,11 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import remote from '@deepseek-ai/dsh-meeting-room/remote'
+import remote from '@deepseek-ai/dsh-experimental-meeting-room/remote'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { Employee, ProjectTeam, ProjectPlan } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectTeam, ProjectPlan } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { ProjectPage, type ProjectCheckpoint } from './ProjectPage.tsx'
 import { RosterPanel } from './RosterPanel.tsx'
@@ -23,7 +23,7 @@ import { SessionProjects, ProjectSectionActions } from './SessionProjects.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import { mountTeamPicker } from './team-picker.ts'
 import { mountSessionArtifacts } from './session-artifacts-view.ts'
-import type { EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
+import type { EmployeeSaveInput, TeamSaveInput, RosterConnection } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -33,7 +33,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services the registration reads. */
-export const inject = ['slots', 'locale', 'remote', 'uiWorkspace', 'contextMenus', 'layout', 'conversation', 'sessions']
+export const inject = ['slots', 'locale', 'remote', 'remote.session', 'uiWorkspace', 'contextMenus', 'layout', 'conversation', 'sessions']
 
 /**
  * Register the meeting panel, its sidebar entry and its copy.
@@ -49,12 +49,6 @@ export async function apply(ctx: ClientContext): Promise<void> {
 
 /** Mount the retained project catalog and its requirement entry action. */
 function mountProjectPage(ctx: ClientContext): void {
-  let openSettings: (() => void) | undefined
-  ctx.inject(['settingsNavigation'], (scope) => {
-    const open = (): void => { scope.settingsNavigation.open('models') }
-    openSettings = open
-    return () => { if (openSettings === open) openSettings = undefined }
-  })
   const lifetime = new AbortController()
   const catalog = createSnapshotStore<{
     records: ProjectCheckpoint[]
@@ -198,13 +192,6 @@ function mountProjectPage(ctx: ClientContext): void {
   const rosterPanelId = 'project-roster' as MainPanelId
   const rosterActions = {
     hooks: { catalog }, refresh,
-    openModelSettings: () => {
-      try {
-        if (!openSettings) { ctx.contextMenus.notify(t('roster.settings-unavailable')); return }
-        openSettings()
-      }
-      catch (_error) { ctx.contextMenus.notify(t('roster.settings-unavailable')) }
-    },
     saveEmployee: (input: EmployeeSaveInput) => save(() => ctx.remote.projectRoster.saveEmployee(input, lifetime.signal)),
     saveTeam: (input: TeamSaveInput) => save(() => ctx.remote.projectRoster.saveTeam(input, lifetime.signal)),
     delegateTeam: (id: string) => {
@@ -241,6 +228,22 @@ function mountProjectPage(ctx: ClientContext): void {
           `${t(repairing ? 'review.reworkPrompt' : 'review.continuePrompt')}\n${JSON.stringify({ projectId: id, expectedCheckpoint: checkpoint })}`)
       },
       openMain: (sessionId: string, projectId: string) => { mainPrompt(sessionId, `${t('project.correct-prompt')}\n${JSON.stringify({ projectId })}`) },
+      stopExecution: (sessionId: string) => {
+        void ctx.remote.projectDashboard.stopExecution(sessionId, lifetime.signal).then((result) => {
+          if (!result.ok) ctx.contextMenus.notify(t('project.stop-failed'))
+          else if (!result.value.cancelled) ctx.contextMenus.notify(t('project.stop-idle'))
+          else refresh()
+        }).catch(() => { ctx.contextMenus.notify(t('project.stop-failed')) })
+      },
+      openArtifactLocation: async (sessionId: string, path: string, action: 'open' | 'reveal', application?: string) => {
+        const resolved = await ctx.remote.projectDashboard.resolveProjectArtifact(sessionId, path, lifetime.signal)
+        if (!resolved.ok) throw new Error(t('project.file-read-failed'))
+        const request = action === 'reveal'
+          ? { action: 'reveal' as const, path: resolved.value.path }
+          : { path: resolved.value.path, ...(application === undefined ? {} : { application }) }
+        const opened = await ctx.remote.session.openWorkspacePath(request)
+        if (!opened.ok) throw new Error(t('viewer.open-failed'))
+      },
       openWorker: (parent: string, child: string) => {
         ctx.uiWorkspace.openSession({ parentSessionId: parent as SessionId, childSessionId: child as SessionId, mode: 'continuable' })
       },

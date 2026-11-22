@@ -4,7 +4,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { Employee, ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { SessionMeetings, type MeetingCatalog } from '../src/client/SessionMeetings.tsx'
 import { ProjectPage, type ProjectCheckpoint } from '../src/client/ProjectPage.tsx'
 import { SessionProjects, ProjectSectionActions } from '../src/client/SessionProjects.tsx'

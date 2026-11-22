@@ -1,6 +1,6 @@
 /** Actual meeting records associated with the main conversation selected from its menu. */
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { MeetingRecord } from '@deepseek-ai/dsh-meeting-room/types'
+import type { MeetingRecord } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { NS } from './locales.ts'
 import css from './ProjectPage.module.css'

@@ -5,93 +5,93 @@
 /:
   en: cb036c613b05a8f6
   zh: c08dcaa6839e697d
-/deepseek-ai-dsh-meeting-room:
-  en: cd5b534fc4b99120
-  zh: dd1c6426d283c793
-/deepseek-ai-dsh-meeting-room/summary:
+/deepseek-ai-dsh-experimental-meeting-room:
+  en: a0e428fbeca5a2ca
+  zh: 09baf234ad8db537
+/deepseek-ai-dsh-experimental-meeting-room/summary:
   en: ea3753fcc4cd782e
   zh: 22a48ae06aa46a5c
-/deepseek-ai-dsh-meeting-room/table-of-contents:
+/deepseek-ai-dsh-experimental-meeting-room/table-of-contents:
   en: d152484eb41ac6b4
   zh: f0f7f88fe2f53b05
-/deepseek-ai-dsh-meeting-room/use-this-package:
+/deepseek-ai-dsh-experimental-meeting-room/use-this-package:
   en: f4848fb0313b01a0
   zh: 37f9a15e214c73da
-/deepseek-ai-dsh-meeting-room/use-this-package/configuration:
+/deepseek-ai-dsh-experimental-meeting-room/use-this-package/configuration:
   en: dde943f88122ae68
   zh: 57b733a83e1e8429
-/deepseek-ai-dsh-meeting-room/use-this-package/versioned-project-plans:
+/deepseek-ai-dsh-experimental-meeting-room/use-this-package/versioned-project-plans:
   en: c1394185f2c24f6d
   zh: 73dedd03a8e4d363
-/deepseek-ai-dsh-meeting-room/use-this-package/reusable-employees-and-teams:
+/deepseek-ai-dsh-experimental-meeting-room/use-this-package/reusable-employees-and-teams:
   en: 02a251382e864dea
   zh: 4957367c241a0cc7
-/deepseek-ai-dsh-meeting-room/use-this-package/project-execution:
+/deepseek-ai-dsh-experimental-meeting-room/use-this-package/project-execution:
   en: b20584d83ac90d64
   zh: 5d8ae76f833811f8
-/deepseek-ai-dsh-meeting-room/use-this-package/team-shared-tasks:
+/deepseek-ai-dsh-experimental-meeting-room/use-this-package/team-shared-tasks:
   en: b3650191472fe9cf
   zh: 45f19710e97c5ac0
-/deepseek-ai-dsh-meeting-room/understand-the-implementation:
+/deepseek-ai-dsh-experimental-meeting-room/understand-the-implementation:
   en: 76f5e517af9ec7e8
   zh: 2133ace5319ed23a
-/deepseek-ai-dsh-meeting-room/further-exploration:
+/deepseek-ai-dsh-experimental-meeting-room/further-exploration:
   en: c71854e51cadad29
   zh: ea275b7f0323383a
-/deepseek-ai-dsh-meeting-room/model-experience:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/meeting-start-tool:
   en: c6fdb1762262cf78
   zh: ce2215bb886975c2
-/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool/what-the-model-sees:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/meeting-start-tool/what-the-model-sees:
   en: 15e19aa189bc6051
   zh: 70ffa42753b81fc8
-/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool/token-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/meeting-start-tool/token-effect:
   en: e6025c3942fb0ca0
   zh: e739708d61007333
-/deepseek-ai-dsh-meeting-room/model-experience/meeting-start-tool/kv-cache-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/meeting-start-tool/kv-cache-effect:
   en: be60cec84945e6f7
   zh: c63a586114d63888
-/deepseek-ai-dsh-meeting-room/model-experience/role-prompt:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/role-prompt:
   en: 9c4685359dbdd294
   zh: 46e07312da2a5b08
-/deepseek-ai-dsh-meeting-room/model-experience/role-prompt/what-the-model-sees:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/role-prompt/what-the-model-sees:
   en: 5feb81a46d62266a
   zh: 118435bf9ab22a69
-/deepseek-ai-dsh-meeting-room/model-experience/role-prompt/token-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/role-prompt/token-effect:
   en: b61398a311b31aea
   zh: 991b097bfbc649f8
-/deepseek-ai-dsh-meeting-room/model-experience/role-prompt/kv-cache-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/role-prompt/kv-cache-effect:
   en: e0b802a8d349dbd8
   zh: 7a6be8d78b8b7d81
-/deepseek-ai-dsh-meeting-room/model-experience/project-tools:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/project-tools:
   en: 01baac9a17865388
   zh: b1bc56f73f8cefa3
-/deepseek-ai-dsh-meeting-room/model-experience/project-tools/what-the-model-sees:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/project-tools/what-the-model-sees:
   en: 8eec77811c955162
   zh: cb7e1b3913554588
-/deepseek-ai-dsh-meeting-room/model-experience/project-tools/token-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/project-tools/token-effect:
   en: 740412292e579a73
   zh: 3ca2ccf9a41910ad
-/deepseek-ai-dsh-meeting-room/model-experience/project-tools/kv-cache-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/project-tools/kv-cache-effect:
   en: 37368e273ae22592
   zh: aae1a23063337298
-/deepseek-ai-dsh-meeting-room/model-experience/selected-team-context:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/selected-team-context:
   en: 10c79761dabdbd85
   zh: 197ae02f3f40ed1e
-/deepseek-ai-dsh-meeting-room/model-experience/selected-team-context/what-the-model-sees:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/selected-team-context/what-the-model-sees:
   en: 97038096f0080a91
   zh: fbff39926f33d858
-/deepseek-ai-dsh-meeting-room/model-experience/selected-team-context/token-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/selected-team-context/token-effect:
   en: 7b7da4aa0043b1de
   zh: 921bd33062d0a5a6
-/deepseek-ai-dsh-meeting-room/model-experience/selected-team-context/kv-cache-effect:
+/deepseek-ai-dsh-experimental-meeting-room/model-experience/selected-team-context/kv-cache-effect:
   en: 8ca6138ce375e146
   zh: fa70bdb2a66ab6be
-/deepseek-ai-dsh-meeting-room/known-limitations-and-deferred-work:
+/deepseek-ai-dsh-experimental-meeting-room/known-limitations-and-deferred-work:
   en: 9a9fa4a218a0965a
   zh: 0558f6743ebabf3e
-/deepseek-ai-dsh-meeting-room/known-limitations-and-deferred-work/dev-note:
+/deepseek-ai-dsh-experimental-meeting-room/known-limitations-and-deferred-work/dev-note:
   en: 423e4fe135e28558
   zh: f4c1caa2958679b5

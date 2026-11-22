@@ -140,6 +140,9 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
         throw new ToolArgsError(['Provide a goal and at least one task with a role, instruction and acceptance criteria.'])
       }
       const employees = plan?.employees ?? store.employees()
+      if (employees.length === 0) {
+        throw new HarnessError('项目无法执行：花名册尚未配置任何数字员工，也没有带成员的项目计划。请先在主助手中创建员工（说明职责、模型连接与可选预设），或在「数字员工与团队」面板补全配置后再执行。', 'PROJECT_ROSTER_EMPTY')
+      }
       const team = plan?.team ?? (args.teamId === undefined ? undefined : store.teams().find(item => item.id === args.teamId))
       if (args.teamId !== undefined && !team) throw new ToolArgsError(['The selected team does not exist. Read employee_list.'])
       const tasks = requestedTasks.map((task) => {

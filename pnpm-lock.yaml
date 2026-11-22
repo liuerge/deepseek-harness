@@ -10150,6 +10150,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:*
         version: link:../../client/ui-layout
+      '@deepseek-ai/dsh-client-ui-model-selection':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@vendor+cordis)
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../client/ui-primitives
@@ -10174,7 +10177,7 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: workspace:*
         version: link:../../client/ui-workspace
-      '@deepseek-ai/dsh-meeting-room':
+      '@deepseek-ai/dsh-experimental-meeting-room':
         specifier: workspace:*
         version: link:../meeting-room
       '@deepseek-ai/dsh-session':
@@ -12085,10 +12088,10 @@ importers:
 
   packages/experimental/meeting-room-bundle:
     dependencies:
-      '@deepseek-ai/dsh-client-ui-meeting-room':
+      '@deepseek-ai/dsh-experimental-client-ui-meeting-room':
         specifier: workspace:*
         version: link:../client-ui-meeting-room
-      '@deepseek-ai/dsh-meeting-room':
+      '@deepseek-ai/dsh-experimental-meeting-room':
         specifier: workspace:*
         version: link:../meeting-room
     devDependencies:
@@ -21371,6 +21374,11 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
+  '@deepseek-ai/dsh-client-ui-model-selection@0.2.2-rc.5':
+    resolution: {integrity: sha512-DxJvcYU/ZZ/wPhyN7oOmsovj4AXMTxMDy7L5PlGZTcaMSPy0cO4UaPMUAxyEdKJAng0/7gt702Pc3Lb31HlX7A==}
+    peerDependencies:
+      '@deepseek-ai/cordis': ~4.1.0
+
   '@deepseek-ai/libreoffice-kit-darwin-arm64@0.2.3':
     resolution: {integrity: sha512-0dfiEQR6SqAQjh9hxyY8x77Sj3r+AGC+Xn2A/zF+bag9g40leYPL/c2UirSqYR6xUwE9a/5YgWFIHjw1eOh+3A==}
     engines: {node: '>=22.19.0'}
@@ -29258,6 +29266,10 @@ snapshots:
       css-tree: 3.2.1
 
   '@csstools/css-tokenizer@4.0.0': {}
+
+  '@deepseek-ai/dsh-client-ui-model-selection@0.2.2-rc.5(@deepseek-ai/cordis@vendor+cordis)':
+    dependencies:
+      '@deepseek-ai/cordis': link:vendor/cordis
 
   '@deepseek-ai/libreoffice-kit-darwin-arm64@0.2.3':
     optional: true

@@ -95,3 +95,29 @@ describe('registered artifacts allowlist', () => {
     expect(registered.has('/root/plan-doc.md')).toBe(true)
   })
 })
+
+describe('preset route discovery', () => {
+  test('falls through an unconfigured first provider to the next one with a model', async () => {
+    const { findPresetRoute } = await import('../src/preset-roster.ts')
+    const llm = {
+      listProviders: () => [{ id: 'pi-ai' }, { id: 'deepseek' }],
+      listModels: async (provider: string) => provider === 'pi-ai' ? [] : [{ id: 'deepseek-flash' }],
+    }
+    await expect(findPresetRoute(llm, { attempts: 1, delayMs: 0 })).resolves.toEqual({ provider: 'deepseek', model: 'deepseek-flash' })
+  })
+
+  test('retries providers that are not ready yet and honours cancellation', async () => {
+    const { findPresetRoute } = await import('../src/preset-roster.ts')
+    let ready = false
+    const llm = {
+      listProviders: () => [{ id: 'pi-ai' }, { id: 'deepseek' }],
+      listModels: async (provider: string) => provider === 'deepseek' && ready ? [{ id: 'deepseek-flash' }] : [],
+    }
+    const timer = setTimeout(() => { ready = true }, 20)
+    await expect(findPresetRoute(llm, { attempts: 5, delayMs: 5 })).resolves.toEqual({ provider: 'deepseek', model: 'deepseek-flash' })
+    clearTimeout(timer)
+    const abort = new AbortController()
+    abort.abort()
+    await expect(findPresetRoute(llm, { attempts: 3, delayMs: 0, signal: abort.signal })).resolves.toBeUndefined()
+  })
+})

@@ -5,42 +5,42 @@
 /:
   en: 22dc279e0b5a5fde
   zh: 5f3a0ed503bc61f8
-/deepseek-ai-dsh-client-ui-meeting-room:
-  en: dda01f371e643d47
-  zh: 349aa20ab70abc42
-/deepseek-ai-dsh-client-ui-meeting-room/summary:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room:
+  en: f3a40204228b278c
+  zh: e126a75bc667fc6e
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/summary:
   en: 0b58e29fdc6b251e
   zh: 0965571d8fb72e9d
-/deepseek-ai-dsh-client-ui-meeting-room/table-of-contents:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/table-of-contents:
   en: 65663b0d5dfa1600
   zh: dc8dd4f5941b9f74
-/deepseek-ai-dsh-client-ui-meeting-room/use-this-package:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/use-this-package:
   en: caa8de47ff14d87e
   zh: 2ad7101c15f0b0ce
-/deepseek-ai-dsh-client-ui-meeting-room/understand-the-implementation:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/understand-the-implementation:
   en: fdf889cd5831745b
   zh: d18e888585bbb2fb
-/deepseek-ai-dsh-client-ui-meeting-room/further-exploration:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/further-exploration:
   en: eb33a38bf30b1eed
   zh: e08fe6d075cc3445
-/deepseek-ai-dsh-client-ui-meeting-room/model-experience:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-client-ui-meeting-room/model-experience/main-conversation-drafts:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/model-experience/main-conversation-drafts:
   en: f672b5d20e72c2ff
   zh: d6576c0d5132eba0
-/deepseek-ai-dsh-client-ui-meeting-room/model-experience/main-conversation-drafts/what-the-model-sees:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/model-experience/main-conversation-drafts/what-the-model-sees:
   en: 91857d48c91255ef
   zh: fc557b92946d6d8e
-/deepseek-ai-dsh-client-ui-meeting-room/model-experience/main-conversation-drafts/token-effect:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/model-experience/main-conversation-drafts/token-effect:
   en: e68299230af419da
   zh: 57915330ca89bed5
-/deepseek-ai-dsh-client-ui-meeting-room/model-experience/main-conversation-drafts/kv-cache-effect:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/model-experience/main-conversation-drafts/kv-cache-effect:
   en: 7b9b3342f98345d7
   zh: e4ced751f81fb29d
-/deepseek-ai-dsh-client-ui-meeting-room/known-limitations-and-deferred-work:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/known-limitations-and-deferred-work:
   en: f8542d805d18d741
   zh: 8713153ddd6d6483
-/deepseek-ai-dsh-client-ui-meeting-room/known-limitations-and-deferred-work/dev-note:
+/deepseek-ai-dsh-experimental-client-ui-meeting-room/known-limitations-and-deferred-work/dev-note:
   en: 87307317b8542a70
   zh: 53a024369d368357

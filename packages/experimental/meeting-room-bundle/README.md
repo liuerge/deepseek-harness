@@ -3,7 +3,7 @@ description: "Mount the meeting service and the meeting pages in one profile bun
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-meeting-room-bundle
+# @deepseek-ai/dsh-experimental-meeting-room-bundle
 
 English | [中文](README.zh.md)
 
@@ -25,7 +25,7 @@ Add meeting and project workflows to a Web profile with their Host service and C
 <a id="use-this-package"></a>
 ## Use this package
 
-Append `@deepseek-ai/dsh-meeting-room-bundle` to the existing Web profile’s `dsh.profile.bundles` array after its base and Web bundles. It adds the Host meeting service and Client interface. The Client supplies the project workspace and main-conversation meeting menu; the Host supplies tools and retained process records. The base composition provides the required agent, filesystem, Session and subagent services.
+Append `@deepseek-ai/dsh-experimental-meeting-room-bundle` to the existing Web profile’s `dsh.profile.bundles` array after its base and Web bundles. It adds the Host meeting service and Client interface. The Client supplies the project workspace and main-conversation meeting menu; the Host supplies tools and retained process records. The base composition provides the required agent, filesystem, Session and subagent services.
 
 The bundle does not configure the service. The service's own configuration (`provider`, `agentOptions` and `databasePath`) belongs to the profile's patch layer, where a later layer replaces the row's configuration.
 

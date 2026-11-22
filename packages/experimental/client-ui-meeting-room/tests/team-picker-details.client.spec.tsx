@@ -7,7 +7,7 @@ import { SlotTestRuntime, bindSnapshotSelector, makeTranslate } from '@deepseek-
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ComponentProps } from 'react'
-import type { Employee, EmployeeId, ProjectTeam } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, EmployeeId, ProjectTeam } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { TeamPickerController, mountTeamPicker } from '../src/client/team-picker.ts'
 import { TeamPickerHeader, TeamPickerLabel, TeamPickerOption } from '../src/client/TeamPicker.tsx'
 import { zh } from '../src/client/locales.ts'
@@ -42,8 +42,8 @@ it('hides the header action for unknown conversations and shows it for an active
 
 it('offers a disabled choice before a workspace exists and hides the option on child conversations', () => {
   const open = vi.fn()
-  const closeMenu = vi.fn()
-  render(<TeamPickerOption {...{ sessionId: undefined, useSessions: sessions(undefined), open, closeMenu,
+  const dismiss = vi.fn()
+  render(<TeamPickerOption {...{ sessionId: undefined, useSessions: sessions(undefined), open, dismiss,
     t: makeTranslate(zh) } as ComponentProps<typeof TeamPickerOption>} />)
   const item = screen.getByRole('menuitem')
   expect(item.getAttribute('aria-disabled')).toBe('true')
@@ -52,7 +52,7 @@ it('offers a disabled choice before a workspace exists and hides the option on c
   cleanup()
   render(<TeamPickerOption {...{ sessionId: 'main' as SessionId,
     useSessions: (selector: (value: { byId: Record<string, unknown> }) => unknown) =>
-      selector({ byId: { main: { origin: 'subagent' } } }), open, closeMenu,
+      selector({ byId: { main: { origin: 'subagent' } } }), open, dismiss,
     t: makeTranslate(zh) } as ComponentProps<typeof TeamPickerOption>} />)
   expect(screen.queryByRole('menuitem')).toBeNull()
 })
@@ -99,14 +99,14 @@ it('isolates read failures, missing members, duplicate writes and disposal', asy
   const selectPanel = vi.fn()
   runtime.ctx.provide('layout', { selectPanel } as never)
   await runtime.declare({
-    'conversation.hero.agentPreset.suffix': { kind: 'list', scope: 'session-maybe' },
-    'conversation.hero.agentPreset.options': { kind: 'list', scope: 'session-maybe' },
+    'conversation.hero.options': { kind: 'list', scope: 'session' },
+    'conversation.input.model.options': { kind: 'list', scope: 'session' },
     'conversation.session.header.actions': { kind: 'list', scope: 'session' },
   })
   mountTeamPicker(runtime.ctx)
   try {
     // A rejected preference read marks the picker failed with the message.
-    const suffixEntry = runtime.slots.entries('conversation.hero.agentPreset.suffix')[0]
+    const suffixEntry = runtime.slots.entries('conversation.hero.options')[0]
     const picker = (suffixEntry?.inject as ((sessionId: SessionId) => Record<string, unknown>) | undefined)?.('main' as SessionId) as {
       hooks: { teamPicker: { getSnapshot: () => { failed: boolean; failure: string | null; open: boolean } } }
       load: () => Promise<void>

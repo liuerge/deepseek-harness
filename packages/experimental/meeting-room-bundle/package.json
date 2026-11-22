@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-meeting-room-bundle",
+  "name": "@deepseek-ai/dsh-experimental-meeting-room-bundle",
   "description": "Meeting room composition: the host meeting service and the meeting pages in one profile bundle",
   "version": "0.2.2-rc.5",
   "publishConfig": {
@@ -45,7 +45,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-client-ui-meeting-room": "workspace:*",
-    "@deepseek-ai/dsh-meeting-room": "workspace:*"
+    "@deepseek-ai/dsh-experimental-client-ui-meeting-room": "workspace:*",
+    "@deepseek-ai/dsh-experimental-meeting-room": "workspace:*"
   }
 }

@@ -75,7 +75,6 @@ function renderSeat(
       ? useSessionRetainInfo
       : <Selected,>(selector: (value: SessionRetainInfo | undefined) => Selected) => selector(session.retainInfo),
     t: translate,
-    renderSlot: vi.fn(() => null),
   } as AgentPresetSeatProps
   render(<AgentPresetSeat {...props} />)
   return { ...actions, developerTools, store }

@@ -3,7 +3,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
+import type { ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { SessionArtifacts } from '../src/client/SessionArtifacts.tsx'
 import { sessionArtifacts, sessionPlans, planFileName } from '../src/client/session-artifacts.ts'

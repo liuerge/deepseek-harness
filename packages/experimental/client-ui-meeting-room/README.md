@@ -3,7 +3,7 @@ description: "Main-conversation meeting records, project progress and acceptance
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-client-ui-meeting-room
+# @deepseek-ai/dsh-experimental-client-ui-meeting-room
 
 English | [中文](README.zh.md)
 

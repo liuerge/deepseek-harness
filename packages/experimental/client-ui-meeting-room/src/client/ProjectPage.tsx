@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { Employee, ProjectTeam, ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectTeam, ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Button, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconFullscreenOutlineRegular, Input, Modal, SegmentedControl, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -11,7 +11,7 @@ import css from './ProjectPage.module.css'
 import { StatusChip, statusTone } from './StatusChip.tsx'
 import { FileChip } from './FileChip.tsx'
 import { RosterAvatar } from './RosterAvatar.tsx'
-import type { RosterConnection } from '@deepseek-ai/dsh-meeting-room/types'
+import type { RosterConnection } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 
 /** Persisted execution checkpoint exposed by the project query. */
 export interface ProjectCheckpoint {
@@ -56,6 +56,8 @@ export interface ProjectInjected {
   approveAcceptance: (id: string, checkpoint: number) => Promise<void>
   continueProject: (id: string, checkpoint: number) => void
   openMain: (id: string, projectId: string) => void
+  stopExecution: (sessionId: string) => void
+  openArtifactLocation: (sessionId: string, path: string, action: 'open' | 'reveal', application?: string) => Promise<void>
   openWorker: (parent: string, child: string) => void
   adoptPlan: (id: string, revision: number) => void
 }
@@ -101,6 +103,11 @@ const COLUMNS = [
   { key: 'done', label: 'board.column.done', tone: 'done' },
   { key: 'blocked', label: 'board.column.blocked', tone: 'error' },
 ] as const
+
+/** Whether a checkpoint state belongs to an in-flight execution that can be interrupted. */
+function isInFlight(state: string | undefined): boolean {
+  return state !== undefined && ['starting', 'running', 'task-produced', 'reviewer-produced', 'resuming', 'reworking', 'awaiting-acceptance', 'awaiting-human', 'awaiting-review'].includes(state)
+}
 
 /** Map a checkpoint state to the board column that owns it. */
 function columnOf(state: string): ColumnKey {
@@ -161,8 +168,8 @@ function collectAssets(plan: ProjectPlan | undefined, records: ProjectCheckpoint
  */
 export function ProjectPage(props: Props) {
   const { useCatalog, t, refresh, newProject, openRoster, readArtifact, useContextMenu } = props
-  const { preparePlan, confirmPlan, runPlan, editPlan, approveAcceptance, continueProject, openMain, openWorker } = props
-  const { adoptPlan } = props
+  const { preparePlan, confirmPlan, runPlan, editPlan, approveAcceptance, continueProject } = props
+  const { openMain, openWorker, stopExecution, openArtifactLocation, adoptPlan } = props
   const catalog = useCatalog(value => value)
   const { getTriggerProps } = useContextMenu()
   const fileTrigger = (sessionId: string | undefined, path: string): ContextMenuTriggerProps => {
@@ -244,9 +251,11 @@ export function ProjectPage(props: Props) {
     sha256?: string
     error?: string
   }>({ loading: false })
+  const [openError, setOpenError] = useState<string | undefined>(undefined)
   const openArtifact = (sessionId: string | undefined, path: string, hash?: string): void => {
     if (sessionId === undefined || sessionId === '') return
     setFileView({ sessionId, path, hash })
+    setOpenError(undefined)
     setFileContent({ loading: true })
     void readArtifact(sessionId, path).then((result) => {
       setFileContent({ loading: false, content: result.content, ...(result.sha256 === undefined ? {} : { sha256: result.sha256 }) })
@@ -537,6 +546,10 @@ export function ProjectPage(props: Props) {
       <div className={css.workbench}>
         <div className={css.main}>
           {catalog.loading && <p role="status">{t('project.loading')}</p>}
+          {!catalog.loading && catalog.employees.length === 0 && <p role="alert" className={css.pendingItem}>
+            <span>{t('project.roster-empty-hint')}</span>
+            <Button variant="outline" size="sm" onClick={openRoster}>{t('rail.team-config')}</Button>
+          </p>}
 
           {primary && <div className={css.summary}>
             <span className={css.summaryGoal} title={primaryGoal}>{primaryGoal}</span>
@@ -555,6 +568,10 @@ export function ProjectPage(props: Props) {
               <Button variant="outline" onClick={() => { openMain(primary[1][0]?.sessionId ?? primaryLatest?.sessionId ?? '', primary[0]) }}>
                 {t('project.correct-main')}
               </Button>
+              {isInFlight(primaryLatest?.state) && <Button variant="outline"
+                onClick={() => { stopExecution(primary[1][0]?.sessionId ?? primaryLatest?.sessionId ?? '') }}>
+                {t('project.stop')}
+              </Button>}
             </span>
           </div>}
 
@@ -669,7 +686,23 @@ export function ProjectPage(props: Props) {
       {fileContent.error !== undefined && <p role="alert">{fileContent.error}</p>}
       {fileContent.content !== undefined && <pre className={css.fileViewerPre}>{fileContent.content}</pre>}
       {fileView?.hash !== undefined && <p className={css.secondary}>{fileView.hash}</p>}
+      {openError !== undefined && <p role="alert">{openError}</p>}
       <div className={css.fileViewerActions}>
+        <Button variant="outline" size="sm" onClick={() => {
+          if (fileView === null) return
+          void openArtifactLocation(fileView.sessionId, fileView.path, 'reveal')
+            .catch((error: unknown) => { setOpenError(error instanceof Error ? error.message : String(error)) })
+        }}>{t('viewer.open-folder')}</Button>
+        <Button variant="outline" size="sm" onClick={() => {
+          if (fileView === null) return
+          void openArtifactLocation(fileView.sessionId, fileView.path, 'open')
+            .catch((error: unknown) => { setOpenError(error instanceof Error ? error.message : String(error)) })
+        }}>{t('viewer.open-app')}</Button>
+        <Button variant="outline" size="sm" onClick={() => {
+          if (fileView === null) return
+          void openArtifactLocation(fileView.sessionId, fileView.path, 'open', 'vscode')
+            .catch((error: unknown) => { setOpenError(error instanceof Error ? error.message : String(error)) })
+        }}>{t('viewer.open-vscode')}</Button>
         <Button variant="outline" size="sm" onClick={() => {
           const blob = new Blob([fileContent.content ?? ''], { type: 'text/plain;charset=utf-8' })
           const url = URL.createObjectURL(blob)

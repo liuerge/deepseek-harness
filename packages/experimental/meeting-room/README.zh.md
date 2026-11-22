@@ -3,7 +3,7 @@ description: "主会话驱动的会议流程，含独立角色会话与结论留
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-meeting-room
+# @deepseek-ai/dsh-experimental-meeting-room
 
 [English](README.md) | 中文
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ```yaml
 - id: meeting-room
-  name: '@deepseek-ai/dsh-meeting-room'
+  name: '@deepseek-ai/dsh-experimental-meeting-room'
   config:
     provider: spawn
     agentOptions:

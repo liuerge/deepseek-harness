@@ -88,6 +88,22 @@ it('reads verified report artifacts and fails loudly when the file disappeared',
   } finally { store.close() }
 })
 
+it('resolves a registered artifact to an absolute path for external open actions', async () => {
+  const store = new MeetingStore(':memory:')
+  try {
+    const directory = await mkdtemp(join(tmpdir(), 'dashboard-resolve-'))
+    const artifact = join(directory, 'plan.md')
+    await writeFile(artifact, '# Delivery plan\n')
+    store.savePlan(plan('session', { path: artifact, sha256: '0'.repeat(64), cwd: directory }), 0)
+    const dashboard_ = await dashboard(directory, store)
+    const result = await dashboard_.resolveProjectArtifact('session', artifact, new AbortController().signal)
+    expect(result.path).toBe(artifact)
+    expect(result.sha256).not.toBe('0'.repeat(64))
+    await expect(dashboard_.resolveProjectArtifact('session', join(directory, 'other.md'), new AbortController().signal))
+      .rejects.toMatchObject({ code: 'PROJECT_ARTIFACT_NOT_REGISTERED' })
+  } finally { store.close() }
+})
+
 it('exposes roster and plan reads over the remote face', async () => {
   const store = new MeetingStore(':memory:')
   try {

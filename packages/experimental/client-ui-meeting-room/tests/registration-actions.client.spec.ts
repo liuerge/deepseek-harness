@@ -3,7 +3,7 @@
 /** Panel registration routes every action to its exact destination and reports failures loudly. */
 import { expect, it, vi, type Mock } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { EmployeeId } from '@deepseek-ai/dsh-meeting-room/types'
+import type { EmployeeId } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { mountPanel } from './support/panel-runtime.client.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -18,7 +18,7 @@ function panelLabel(label: unknown): string | undefined {
 }
 
 it('routes every panel action to its exact destination', async () => {
-  const mounted = await mountPanel({ settingsNavigation: { open: vi.fn() } })
+  const mounted = await mountPanel()
   const { runtime, handle, project, rosterFace, openSession, initialize, selectPanel, startSession } = mounted
   try {
     await vi.waitFor(() => { expect(project.hooks.catalog.getSnapshot().loading).toBe(false) })
@@ -43,7 +43,6 @@ it('routes every panel action to its exact destination', async () => {
     rosterFace.delegateTeam('team-1')
     expect(startSession).toHaveBeenCalledOnce()
     expect(recordedPrompt(startSession)).toContain('teamId="team-1"')
-    rosterFace.openModelSettings()
     // Requirement routing: edit, run, prepare, adopt, roster jump.
     project.editPlan('plan-1', 3)
     expect(openSession).toHaveBeenLastCalledWith('main-root')
@@ -86,7 +85,6 @@ it('reports refresh, confirm, save and read failures without losing the panel', 
     saveEmployee: vi.fn(async () => { throw new Error('save rejected') }),
     readProjectArtifact: vi.fn(async () => ({ ok: false as const, error: { message: 'not registered' } })),
     initialize: vi.fn(() => 'blocked' as const),
-    settingsNavigation: { open: vi.fn(() => { throw new Error('settings crash') }) },
   })
   const { runtime, handle, project, rosterFace, notify } = mounted
   try {
@@ -105,8 +103,6 @@ it('reports refresh, confirm, save and read failures without losing the panel', 
     // A blocked main conversation draft falls back to the menu notification.
     project.openMain('main-root', 'run-1')
     await vi.waitFor(() => { expect(notify).toHaveBeenCalled() })
-    rosterFace.openModelSettings()
-    await vi.waitFor(() => { expect(notify).toHaveBeenCalledWith(zh['roster.settings-unavailable']) })
   } finally { await handle.dispose(); await runtime.dispose() }
 })
 

@@ -1,6 +1,6 @@
-import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
-import { mountLocalActivations, startTestActivation as start } from '../../subagent/tests/local-activation.ts'
-import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
+import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
+import { mountLocalActivations, startTestActivation as start } from '../../../subagent/subagent/tests/local-activation.ts'
+import { loadStoredSession } from '../../../subagent/subagent/tests/persistence-helpers.ts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -8,7 +8,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import * as spawn from '../src/index.ts'
+import * as spawn from '../../../subagent/subagent-spawn-in-process/src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]

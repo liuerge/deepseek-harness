@@ -78,3 +78,38 @@ export function seedPresetRoster(store: MeetingStore, route: PresetRoute): void 
     ownerEmployeeId: ownerId, allowAssignment: true,
   }, 0)
 }
+
+/** Minimal Host LLM surface needed to pick a usable route for the preset team. */
+export interface PresetRouteSource {
+  listProviders(): readonly { readonly id: string }[]
+  listModels(provider: string, signal?: AbortSignal): Promise<readonly { readonly id: string }[]>
+}
+
+/**
+ * Pick the first provider that actually exposes a model. Configurable providers
+ * register in bundle order and the first one may be unconfigured (no API key),
+ * so every provider is tried on each round until one yields a model.
+ * @param llm - Host model directory.
+ * @param options - Retry count, delay and cancellation.
+ * @returns A usable route, or undefined when no provider exposes a model in time.
+ */
+export async function findPresetRoute(llm: PresetRouteSource, options: {
+  attempts?: number
+  delayMs?: number
+  signal?: AbortSignal
+} = {}): Promise<PresetRoute | undefined> {
+  const attempts = options.attempts ?? 10
+  const delayMs = options.delayMs ?? 2000
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (options.signal?.aborted) return undefined
+    for (const provider of llm.listProviders()) {
+      if (options.signal?.aborted) return undefined
+      const models = await llm.listModels(provider.id, options.signal).catch(() => [])
+      const model = models[0]
+      if (model === undefined) continue
+      return { provider: provider.id, model: model.id }
+    }
+    await new Promise<void>((resolve) => { setTimeout(resolve, delayMs) })
+  }
+  return undefined
+}

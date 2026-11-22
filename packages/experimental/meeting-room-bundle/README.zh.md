@@ -3,7 +3,7 @@ description: "在一个 profile bundle 中同时挂载会议服务与会议页�
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-meeting-room-bundle
+# @deepseek-ai/dsh-experimental-meeting-room-bundle
 
 [English](README.md) | 中文
 
@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-将 `@deepseek-ai/dsh-meeting-room-bundle` 追加到现有 Web profile 的 `dsh.profile.bundles` 数组，在基础和 Web bundle 之后加载。它加入 Host 会议服务与 Client 界面。Client 提供项目工作台和主会话会议菜单，Host 提供工具与持久流程记录。基础组合提供所需的 Agent、文件、Session 和子智能体服务。
+将 `@deepseek-ai/dsh-experimental-meeting-room-bundle` 追加到现有 Web profile 的 `dsh.profile.bundles` 数组，在基础和 Web bundle 之后加载。它加入 Host 会议服务与 Client 界面。Client 提供项目工作台和主会话会议菜单，Host 提供工具与持久流程记录。基础组合提供所需的 Agent、文件、Session 和子智能体服务。
 
 bundle 不负责配置服务。服务自身的配置（`provider`、`agentOptions` 与 `databasePath`）属于 profile 的 patch 层，靠后的一层会替换该行的配置。
 

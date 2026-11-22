@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SlotTestRuntime, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { Employee, ProjectTeam, SelectSessionTeamInput } from '@deepseek-ai/dsh-meeting-room/types'
+import type { Employee, ProjectTeam, SelectSessionTeamInput } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import { TeamPickerController } from '../src/client/team-picker.ts'
 import { TeamPickerLabel, TeamPickerOption } from '../src/client/TeamPicker.tsx'
 import { zh } from '../src/client/locales.ts'
@@ -94,11 +94,11 @@ it('shows individual routes and a saved-choice activation failure, and requires 
   const runtime = await SlotTestRuntime.create()
   const controller = new TeamPickerController(runtime.ctx, 'main' as SessionId)
   const open = vi.fn()
-  const closeMenu = vi.fn()
+  const dismiss = vi.fn()
   try {
     render(<TeamPickerOption {...{ sessionId: undefined,
       useSessions: (selector: (value: { byId: object }) => unknown) => selector({ byId: {} }),
-      open, closeMenu, t: makeTranslate(zh) } as ComponentProps<typeof TeamPickerOption>} />)
+      open, dismiss, t: makeTranslate(zh) } as ComponentProps<typeof TeamPickerOption>} />)
     fireEvent.click(screen.getByRole('menuitem'))
     expect(open).not.toHaveBeenCalled()
     cleanup()

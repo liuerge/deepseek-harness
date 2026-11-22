@@ -73,6 +73,20 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0], optio
   return { ctx, databasePath, adapter, directory }
 }
 
+/**
+ * Seed one roster employee so an inline execution runs on the populated path.
+ * Execution refuses an empty roster; the refusal itself has a dedicated case.
+ * @param databasePath - Durable meeting store path.
+ * @returns The seeded employee id.
+ */
+function seedRoster(databasePath: string): EmployeeId {
+  const store = new MeetingStore(databasePath)
+  try {
+    return store.saveEmployee({ id: brandString<EmployeeId>('inline-worker'), revision: 1,
+      name: 'Inline worker', responsibility: 'Produce the delivery.', provider: 'mock', model: 'mock' }, 0).id
+  } finally { store.close() }
+}
+
 /** Concatenate the text blocks of one logged user message. */
 function userText(content: readonly { type: string; text?: string }[]): string {
   return content.filter(block => block.type === 'text').map(block => block.text ?? '').join('')
@@ -259,6 +273,7 @@ describe('meeting room', () => {
   it('stops an inline execution for pending user direction without offering an unsupported continuation', async () => {
     let queueDirection: () => void = () => { throw new Error('Caller must exist before its worker runs') }
     const { ctx, adapter, databasePath } = await setup([() => { queueDirection(); return textResponse('First task produced') }])
+    seedRoster(databasePath)
     const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('inline-direction'),
       agentOptions: { provider: 'mock', model: 'mock' } })
     queueDirection = () => { caller.agent.inbox.append('next-turn', createUserMessage({
@@ -348,11 +363,9 @@ describe('meeting room', () => {
       name: 'Team', memberIds: [employee.id] }, 0)
     const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('racing-selection-main'),
       agentOptions: { provider: 'mock', model: 'mock' } })
-    // oxlint-disable-next-line typescript/unbound-method -- call() supplies the actual store receiver inside the prototype spy.
-    const save = MeetingStore.prototype.saveSessionTeam
     vi.spyOn(MeetingStore.prototype, 'saveSessionTeam').mockImplementationOnce(function (this: MeetingStore, id, selection, revision) {
       other.saveEmployee({ ...employee, revision: 2, model: 'changed-before-commit' }, 1)
-      return save.call(this, id, selection, revision)
+      return MeetingStore.prototype.saveSessionTeam.call(this, id, selection, revision)
     })
     try {
       expect(() => ctx.projectTeamContext.select(caller.agent.session, { expectedRevision: 0, teamId: team.id,
@@ -1186,6 +1199,7 @@ describe('meeting room', () => {
       controller.abort()
       return textResponse('Partial output')
     }])
+    seedRoster(databasePath)
     const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('cancelled-project'), agentOptions: { provider: 'mock', model: 'mock' } })
     try {
       caller.agent.session.append('turn/start', { turn: 1 })
@@ -1218,6 +1232,7 @@ describe('meeting room', () => {
       textResponse('Artifact report.txt contains shipped. Verify its contents.'),
       textResponse('Verified report.txt. Ready for user review.'),
     ])
+    seedRoster(databasePath)
     const artifact = join(directory, 'report.txt')
     ctx.tools.register(defineTool({
       name: 'write_project_artifact', description: 'Write the project test artifact.', parameters: {},
@@ -1255,6 +1270,7 @@ describe('meeting room', () => {
 
   it('stops dependent tasks when a worker reaches its token ceiling', async () => {
     const { ctx, databasePath, adapter } = await setup([maxTokensResponse('Partial work')])
+    seedRoster(databasePath)
     const caller = await ctx.agents.create({ sessionId: brandString<SessionId>('failed-project'), agentOptions: { provider: 'mock', model: 'mock' } })
     try {
       caller.agent.session.append('turn/start', { turn: 1 })

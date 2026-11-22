@@ -20,23 +20,6 @@ export type { ConfigForms } from './config-form.ts'
 export type { ConfigForm, ConfigFormSnapshot } from './config-form-types.ts'
 export type { SettingsSchemaService } from './schema.ts'
 export type { SchemaNode } from './schema.ts'
-
-/** Open the existing settings dialog from another feature without replacing its shell. */
-export interface SettingsNavigation {
-  /**
-   * Open a registered settings section.
-   * @param sectionId - Exact settings.section registration id.
-   * @throws when the requested section is unavailable.
-   */
-  open(sectionId: string): void
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /** Navigation owned by the mounted settings shell. */
-    settingsNavigation: SettingsNavigation
-  }
-}
 export type {
   SettingsDescribeFace, SettingsDescribeView, SettingsMirrorSnapshot,
 } from './settings-mirror.ts'

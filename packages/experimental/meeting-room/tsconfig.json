@@ -43,6 +43,18 @@
     },
     {
       "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../subagent/subagent-spawn-in-process"
+    },
+    {
+      "path": "../../core/agent-loop"
+    },
+    {
+      "path": "../../test-support/agent-loop-testkit"
     }
   ]
 }

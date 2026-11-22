@@ -225,10 +225,6 @@ export function apply(ctx: ClientContext): void {
       creatorDraft = startCreatorDraft
       const chip = scope.slots.register({
         name: 'conversation.hero.agentPreset',
-        children: {
-          'conversation.hero.agentPreset.suffix': { kind: 'list', scope: 'session-maybe' },
-          'conversation.hero.agentPreset.options': { kind: 'list', scope: 'session-maybe' },
-        },
         locale: 'settings.agentPreset',
         inject: seatInjected,
       }, AgentPresetSeat)

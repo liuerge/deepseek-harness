@@ -1,5 +1,5 @@
 /** Session-associated plan exports and files observed during independent review. */
-import type { ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-meeting-room/types'
+import type { ProjectPlan, AcceptanceReport } from '@deepseek-ai/dsh-experimental-meeting-room/types'
 import type { ProjectCheckpoint } from './ProjectPage.tsx'
 
 /** One task's latest independently observed artifact version. */

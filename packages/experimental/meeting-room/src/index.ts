@@ -10,7 +10,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MeetingStore } from './store.ts'
-import { seedPresetRoster } from './preset-roster.ts'
+import { seedPresetRoster, findPresetRoute } from './preset-roster.ts'
 import { resolveEmployeeRoute } from './employee-route.ts'
 import { registerProjectTools } from './project-tools.ts'
 import ProjectDashboard from './dashboard.ts'
@@ -131,27 +131,17 @@ export default class MeetingRoom extends Service {
     ctx.plugin(ProjectDashboard, { store: this.store, acceptanceMaxBytes: config.acceptanceMaxBytes })
     ctx.plugin(ProjectRoster, { store: this.store, modelCatalogTimeoutMs: config.modelCatalogTimeoutMs })
     ctx.plugin(ProjectTeamContext, { store: this.store })
-    // Seed the preset roster once the Host exposes a model route, so a fresh install ships usable teams.
+    // Seed the preset roster once any Host provider exposes a usable model route.
+    // Configurable providers register in bundle order (e.g. llm-pi-ai before
+    // llm-deepseek-api-key); the first one may have no credentials or no models,
+    // so findPresetRoute tries every provider on each round.
     ctx.effect(() => {
+      const abort = new AbortController()
       void (async () => {
-        for (let attempt = 0; attempt < 5; attempt += 1) {
-          const providers = this.ctx.llm.listProviders()
-          const provider = providers[0]
-          if (provider === undefined) {
-            await new Promise((resolve) => { setTimeout(resolve, 2000) })
-            continue
-          }
-          const models = await this.ctx.llm.listModels(provider.id).catch(() => [])
-          const model = models[0]
-          if (model === undefined) {
-            await new Promise((resolve) => { setTimeout(resolve, 2000) })
-            continue
-          }
-          seedPresetRoster(this.store, { provider: provider.id, model: model.id })
-          return
-        }
+        const route = await findPresetRoute(this.ctx.llm, { signal: abort.signal })
+        if (route !== undefined && !abort.signal.aborted) seedPresetRoster(this.store, route)
       })().catch(() => { /* 预置种子尽力而为：失败时用户仍可手动创建团队 */ })
-      return async () => { /* 种子随服务生命周期终止 */ }
+      return async () => { abort.abort() }
     })
     this.ctx.tools.register(defineTool({
       name: 'meeting_start',
