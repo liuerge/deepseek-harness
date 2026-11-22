@@ -7,6 +7,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { z } from 'zod'
 import type { MeetingStore } from './store.ts'
 import { assertEmployeeRouteConfig, employeeReasoningEfforts } from './employee-route.ts'
+import { externalConnections, isExternalSubagentProvider } from './external-subagent.ts'
 import type { Employee, EmployeeId, ProjectTeam, ProjectTeamId, EmployeeSaveInput, TeamSaveInput, RosterConnection } from './types.ts'
 
 const text = z.string().trim().min(1)
@@ -52,7 +53,10 @@ export default class ProjectRoster extends TypertRemoteService {
   async connections(signal: AbortSignal): Promise<RosterConnection[]> {
     const active = AbortSignal.any([signal, this.lifetime.signal])
     active.throwIfAborted()
-    return Promise.all(this.ctx.llm.listProviders().map(async (provider) => {
+    // Out-of-process subagent providers (Codex / Claude Code) are selectable
+    // as employee engines even though they are not LLM routes.
+    const external = externalConnections(this.ctx)
+    const llmConnections = await Promise.all(this.ctx.llm.listProviders().map(async (provider) => {
       const deadline = AbortSignal.any([active, AbortSignal.timeout(this.options.modelCatalogTimeoutMs)])
       let abort: (() => void) | undefined
       try {
@@ -83,6 +87,7 @@ export default class ProjectRoster extends TypertRemoteService {
         return { ...provider, models: [], failed: true }
       } finally { if (abort) deadline.removeEventListener('abort', abort) }
     }))
+    return [...llmConnections, ...external]
   }
 
   /**
@@ -98,13 +103,22 @@ export default class ProjectRoster extends TypertRemoteService {
     if (!parsed.success) throw new HarnessError('Enter all employee fields and a valid revision.', 'PROJECT_ROSTER_INPUT')
     const fields = parsed.data
     this.assertRevision(fields.id, fields.expectedRevision)
-    if (!this.ctx.llm.listProviders().some(provider => provider.id === fields.provider)) {
+    const isExternal = isExternalSubagentProvider(this.ctx, fields.provider)
+    if (!isExternal && !this.ctx.llm.listProviders().some(provider => provider.id === fields.provider)) {
       throw new HarnessError('The selected model connection is unavailable. Refresh connections before saving.', 'PROJECT_ROSTER_PROVIDER')
     }
-    // The board dispatch path bypasses the tool-subagent allowlist, so enforce
-    // the Host policy here (and again at dispatch) before a route is persisted.
-    assertEmployeeRouteConfig(this.ctx, fields.provider, fields.model)
-    for (const fallback of fields.fallbacks) assertEmployeeRouteConfig(this.ctx, fallback.provider, fallback.model)
+    // External subagent providers own their route and are not part of the Host
+    // model allowlist; skip the LLM route check for them.
+    if (!isExternal) {
+      // The board dispatch path bypasses the tool-subagent allowlist, so enforce
+      // the Host policy here (and again at dispatch) before a route is persisted.
+      assertEmployeeRouteConfig(this.ctx, fields.provider, fields.model)
+    }
+    for (const fallback of fields.fallbacks) {
+      if (!isExternalSubagentProvider(this.ctx, fallback.provider)) {
+        assertEmployeeRouteConfig(this.ctx, fallback.provider, fallback.model)
+      }
+    }
     return Promise.resolve(this.store.saveEmployee({
       id: brandString<EmployeeId>(fields.id ?? randomUUID()), revision: fields.expectedRevision + 1,
       name: fields.name, responsibility: fields.responsibility, provider: fields.provider, model: fields.model,

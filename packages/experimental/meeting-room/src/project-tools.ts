@@ -10,6 +10,7 @@ import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import type { Config } from './index.ts'
 import type { MeetingStore } from './store.ts'
 import { resolveEmployeeRoute, resolveEmployeeFallback } from './employee-route.ts'
+import { externalActivation } from './external-subagent.ts'
 import type { EmployeeId, ProjectPlanId, ProjectExecutionId, AcceptanceReport, ProjectTeamLinkState } from './types.ts'
 import { verifyPlanDocument, requireGitProject } from './plan-document.ts'
 import { reviewTask, verifyAcceptanceArtifacts } from './acceptance.ts'
@@ -260,16 +261,21 @@ export function registerProjectTools(ctx: Context, store: MeetingStore, config: 
             try {
               const repairAttempt = repairing && rework && index === latest.index
                 ? rework.attempt : undefined
+              const external = task.employee === undefined ? undefined
+                : externalActivation(ctx, task.employee.provider)
               const workerRoute = task.employee === undefined ? config.agentOptions
-                : (repairAttempt === undefined ? undefined
-                  : resolveEmployeeFallback(ctx, task.employee, repairAttempt, signal))
-                  ?? resolveEmployeeRoute(ctx, task.employee, signal)
+                : external?.external === true ? undefined
+                  : (repairAttempt === undefined ? undefined
+                    : resolveEmployeeFallback(ctx, task.employee, repairAttempt, signal))
+                    ?? resolveEmployeeRoute(ctx, task.employee, signal)
               activation = await ctx.subagents.startActivation({
-                provider: config.provider, label: task.employee?.name ?? task.role, parent, cwd,
+                provider: external?.external === true ? external.provider : config.provider,
+                label: task.employee?.name ?? task.role, parent, cwd,
                 prompt: [{ type: 'text', text: prompt }], signal, delivery: 'caller',
                 ...(workerId === undefined ? {} : { childId: workerId }),
                 ...(workerRoute === undefined ? {} : { agentOptions: workerRoute }),
-                ...(task.employee?.preset === undefined ? {} : { agentPreset: task.employee.preset }),
+                ...(external?.external === true || task.employee?.preset === undefined ? {}
+                  : { agentPreset: task.employee.preset }),
               })
             } catch (error) {
               gate?.fail(error)

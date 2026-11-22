@@ -12,6 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MeetingStore } from './store.ts'
 import { seedPresetRoster, findPresetRoute } from './preset-roster.ts'
 import { resolveEmployeeRoute } from './employee-route.ts'
+import { externalActivation } from './external-subagent.ts'
 import { registerProjectTools } from './project-tools.ts'
 import ProjectDashboard from './dashboard.ts'
 import ProjectRoster from './roster-management.ts'
@@ -251,10 +252,12 @@ export default class MeetingRoom extends Service {
       try {
         for (const { role, employee } of participants) {
           activeSignal.throwIfAborted()
+          const external = employee === undefined ? undefined : externalActivation(this.ctx, employee.provider)
           const activation = await this.ctx.subagents.startActivation({
-            provider: this.config.provider, label: role.name, parent,
+            provider: external?.external === true ? external.provider : this.config.provider,
+            label: role.name, parent,
             prompt: [{ type: 'text', text: rolePrompt(request, role, employee) }], signal: activeSignal, delivery: 'caller',
-            ...(employee === undefined ? {} : {
+            ...(employee === undefined || external?.external === true ? {} : {
               agentOptions: resolveEmployeeRoute(this.ctx, employee, activeSignal),
               ...(employee.preset === undefined ? {} : { agentPreset: employee.preset }),
             }),

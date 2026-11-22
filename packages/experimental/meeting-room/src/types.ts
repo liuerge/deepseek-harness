@@ -82,6 +82,8 @@ export interface RosterConnection {
   models: { id: string; name: string; efforts?: { id: string; name: string; description?: string }[] }[]
   /** Whether catalog discovery failed for this route. */
   failed: boolean
+  /** True for out-of-process subagent engines (e.g. Codex / Claude Code) that own their model route. */
+  external?: boolean | undefined
 }
 
 /** Employee configuration captured when a project run is admitted. */

@@ -148,6 +148,7 @@ export function RosterEditor({ employees, teams, connections, connectionsLoading
         && <p role="alert">{t('roster.connection-missing')}</p>}
       {connection?.failed && <p role="alert">{t('roster.catalog-failed')}</p>}
       <p className={css.hint}>{t('roster.model-hint')}</p>
+      {connection?.external === true && <p className={css.hint}>{t('roster.external-hint')}</p>}
       <label>{t('roster.preset')}<Input value={employee.preset ?? ''} disabled={!!pending}
         onChange={(event) => { setEmployee({ ...employee, preset: event.target.value.trim() || undefined }) }} /></label>
       {error === 'employee' && <p role="alert">{t('roster.save-failed')}</p>}

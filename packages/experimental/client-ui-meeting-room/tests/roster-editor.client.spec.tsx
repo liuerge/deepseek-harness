@@ -68,3 +68,13 @@ it('keeps employee versions when editing and requires explicit team members', as
   fireEvent.click(screen.getByRole('button', { name: zh['roster.save'] }))
   await waitFor(() => { expect(saveTeam).toHaveBeenCalledWith({ expectedRevision: 0, name: 'Delivery team', memberIds: [employee.id] }) })
 })
+
+it('shows the native-auth hint when an out-of-process subagent connection is selected', () => {
+  render(<RosterEditor employees={[]} teams={[]} connections={[
+    { id: 'codex', name: 'codex', models: [{ id: 'default', name: 'Provider default' }], failed: false, external: true },
+  ]} connectionsLoading={false} connectionsFailed={false} loading={false}
+  saveEmployee={vi.fn()} saveTeam={vi.fn()} delegateTeam={vi.fn()} t={makeTranslate(zh)} />)
+  fireEvent.click(screen.getByRole('button', { name: zh['roster.employee'] }))
+  fireEvent.change(screen.getByLabelText(zh['roster.connection']), { target: { value: 'codex' } })
+  expect(screen.getByText(zh['roster.external-hint'])).toBeTruthy()
+})
